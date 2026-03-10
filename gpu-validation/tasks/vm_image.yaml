@@ -26,16 +26,17 @@
     ca_cert: "{{ gpu_validation_ca_cert_path }}"
   when: not _gpu_validation_image_exists
 
+- name: Reset extra_specs based GPU mode
+  ansible.builtin.set_fact:
+    gpu_validation_extra_specs:
+      "resources:VGPU": "1"
+  when: gpu_validation_mode == "mig"
+
 - name: Create flavor for GPU validation
   openstack.cloud.compute_flavor:
     name: "{{ gpu_validation_flavor_name }}"
     ram: "{{ gpu_validation_flavor_ram }}"
     vcpus: "{{ gpu_validation_flavor_vcpus }}"
     disk: "{{ gpu_validation_flavor_disk }}"
-    extra_specs:
-      "pci_passthrough:alias": "gpu-l4:{{ gpu_validation_flavor_gpus }}"
-      "hw:pci_numa_affinity_policy": "preferred"
-      "hw:hide_hypervisor_id": "true"
-      "hw:kvm_hidden": "true"
-      "hw:cpu_model": "host-passthrough"
+    extra_specs: "{{ gpu_validation_extra_specs }}"
     ca_cert: "{{ gpu_validation_ca_cert_path }}"
