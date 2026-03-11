@@ -3,15 +3,9 @@
   become: true
   ansible.builtin.import_tasks: setup.yaml
 
-- name: Nvidia Setup
+- name: Nvidia Setup (Use the edpm_accel_drivers role to install the NVIDIA driver in our VM)
   ansible.builtin.include_role:
-    name: nvidia_driver
-    apply:
-      become: true
-  vars:
-    nvidia_driver_module_version: "latest-dkms"
-    nvidia_driver_install_management_library: false
-
+    name: osp.edpm.edpm_accel_drivers
 
 - name: Check GPUs
   ansible.builtin.import_tasks: gpus.yaml

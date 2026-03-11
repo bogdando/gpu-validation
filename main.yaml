@@ -11,7 +11,8 @@
 
 - name: GPU Validation
   hosts: target_nodes
-  gather_facts: false
+  gather_subset:
+    - min
   roles:
     - gpu-validation
 

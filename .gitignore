@@ -5,4 +5,6 @@
 tls-ca-bundle.pem
 creds.yaml
 inventory-local
+vars-local.yaml
 my-AnsibleTestCR.yaml
+main*.xml

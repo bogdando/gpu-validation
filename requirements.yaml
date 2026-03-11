@@ -4,7 +4,4 @@ collections:
     version: ">=2.4.1"
   - name: community.general
     version: ">=10.0.0"
-roles:
-  - name: nvidia_driver
-    src: https://github.com/rhos-vaf/gpu-drivers-ansible.git
-    version: main
+  - name: git+https://github.com/openstack-k8s-operators/edpm-ansible.git
