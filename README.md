@@ -39,7 +39,10 @@ Guests built from CentOS Stream often boot `5.14.0-700.el9` while EDPM computes 
 so DKMS/kernel-devel mismatch breaks the GRID driver install. Enable the role task that aligns the VM kernel:
 
 - Repos on the VM must actually ship the listed kernel RPMs (RHOSP tooling / entitlement channels), **or** use **AlmaLinux**/**Rocky Linux** Vault (below). **Never enable both vault flags** at once—the play fails fast if you do.
-- `gpu_validation_pin_kernel_profiles` carries a **`9.4`** preset (matching the common hybrid stack); extend the map or pass explicit RPM lists **with dist tags that exist on your repos** — Alma often ships `…el9_4.alma.…`; Rocky publishes `…el9_4.rocky*` / `….el9.*rocky`; neither is byte‑identical to Red Hat-signed builds.
+- `gpu_validation_pin_kernel_profiles`:
+  - **`9.4`** — NEVRA set for entitlement **`427.13.1.el9_4`**.
+  - **`9.4-rocky`** — **`5.14.0-427.42.1.el9_4`** (current pin from Rocky **`vault/rocky/9.4`** BaseOS/AppStream repodata — re-check when snapshots move).
+  With **`gpu_validation_pin_kernel_rhel_release: "9.4"`** and **`gpu_validation_pin_kernel_rocky_vault_enable: true`**, the role selects **`9.4-rocky`** automatically.
 
 **CentOS Stream vs RHEL‑line kernels (no entitlement)** · short version:
 

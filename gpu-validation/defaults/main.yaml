@@ -92,8 +92,9 @@ gpu_validation_pin_kernel_devel_packages: []
 gpu_validation_pin_kernel_boot: ""
 gpu_validation_pin_kernel_reboot: true
 gpu_validation_pin_kernel_reboot_timeout: 900
-# Map of pin specifications; tune NEVRAs when your SOE uses a newer 427.* build than below.
+# Map of pin specifications: add keys as needed ("9.4-alma", …). Tune NVR when SOE bumps 427.*
 gpu_validation_pin_kernel_profiles:
+  # RHOSP entitlement / osptrunk — exact GA NEVRA your repos must expose
   "9.4":
     boot: "5.14.0-427.13.1.el9_4.x86_64"
     packages:
@@ -104,6 +105,18 @@ gpu_validation_pin_kernel_profiles:
     devel_packages:
       - kernel-devel-5.14.0-427.13.1.el9_4
       - kernel-headers-5.14.0-427.13.1.el9_4
+  # Rocky vault rocky/9.4 (verified from dl.rockylinux.org vault repodata newest 427.*)
+  # Task kernel_pin.yml remaps rhel_release "9.4" -> this key when rocky_vault_enable is true.
+  "9.4-rocky":
+    boot: "5.14.0-427.42.1.el9_4.x86_64"
+    packages:
+      - kernel-5.14.0-427.42.1.el9_4
+      - kernel-core-5.14.0-427.42.1.el9_4
+      - kernel-modules-5.14.0-427.42.1.el9_4
+      - kernel-modules-core-5.14.0-427.42.1.el9_4
+    devel_packages:
+      - kernel-devel-5.14.0-427.42.1.el9_4
+      - kernel-headers-5.14.0-427.42.1.el9_4
 
 # Optional AlmaLinux Vault repos (RHEL-rebuild kernel RPMs; enable when you have no RH entitlement).
 gpu_validation_pin_kernel_almalinux_vault_enable: false

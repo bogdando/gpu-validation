@@ -51,6 +51,15 @@
         )
       }}
 
+- name: Use Rocky-specific profile when Rocky vault is enabled (distinct 427.* NVR from vault snapshots)
+  when:
+    - gpu_validation_pin_kernel_packages | length == 0
+    - gpu_validation_pin_kernel_rocky_vault_enable | bool
+    - (_gv_kpin_profile_key | trim) == "9.4"
+    - "'9.4-rocky' in gpu_validation_pin_kernel_profiles"
+  ansible.builtin.set_fact:
+    _gv_kpin_profile_key: "9.4-rocky"
+
 - name: Validate profile lookup key exists in configuration map
   when:
     - gpu_validation_pin_kernel_packages | length == 0
