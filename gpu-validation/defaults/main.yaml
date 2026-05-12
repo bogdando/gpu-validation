@@ -104,3 +104,12 @@ gpu_validation_pin_kernel_profiles:
     devel_packages:
       - kernel-devel-5.14.0-427.13.1.el9_4
       - kernel-headers-5.14.0-427.13.1.el9_4
+
+# Optional AlmaLinux Vault repos (RHEL-rebuild kernel RPMs; enable when you have no RH entitlement).
+gpu_validation_pin_kernel_almalinux_vault_enable: false
+gpu_validation_pin_kernel_almalinux_vault_minor: "9.4"
+
+# Optional Rocky Linux Vault repos — mutually exclusive with Alma vault (see README).
+gpu_validation_pin_kernel_rocky_vault_enable: false
+gpu_validation_pin_kernel_rocky_vault_minor: "9.4"
+gpu_validation_pin_kernel_rocky_vault_gpg_url: "https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-9"

@@ -38,8 +38,51 @@ Once the RHOSO + RHEL AI setup is complete, do the following:
 Guests built from CentOS Stream often boot `5.14.0-700.el9` while EDPM computes use **`5.14.0-427*.el9_4`**,
 so DKMS/kernel-devel mismatch breaks the GRID driver install. Enable the role task that aligns the VM kernel:
 
-- Repos on the VM must actually ship the listed kernel RPMs (RHOSP tooling / entitlement channels).
-- `gpu_validation_pin_kernel_profiles` carries a **`9.4`** preset (matching the common hybrid stack); extend the map or pass explicit RPM lists.
+- Repos on the VM must actually ship the listed kernel RPMs (RHOSP tooling / entitlement channels), **or** use **AlmaLinux**/**Rocky Linux** Vault (below). **Never enable both vault flags** at once—the play fails fast if you do.
+- `gpu_validation_pin_kernel_profiles` carries a **`9.4`** preset (matching the common hybrid stack); extend the map or pass explicit RPM lists **with dist tags that exist on your repos** — Alma often ships `…el9_4.alma.…`; Rocky publishes `…el9_4.rocky*` / `….el9.*rocky`; neither is byte‑identical to Red Hat-signed builds.
+
+**CentOS Stream vs RHEL‑line kernels (no entitlement)** · short version:
+
+| Source | Gives you `427*.el9_4`-style kernels to match RHOSP computes? |
+|--------|----------------------------------------------------------------------|
+| **CentOS Stream 9 repos** (`/centos/9-stream/…`) | **No** for the RH EUS lineage — Stream tracks a parallel `…el9` numbering (your `700` example). Same major `5.14`, different build stream. |
+| **CentOS Sources** git + `rpmbuild` | Theoretically possible if you reconstruct the downstream tree—but you must redo packaging, `%dist`, ABI, signatures; operations-heavy compared to grabbing existing EL rebuild binaries. |
+| **AlmaLinux / Rocky Vault** (`…/vault/<minor>/…`) | **Yes-ish** · FREE EL-rebuild lineage. Enable **`gpu_validation_pin_kernel_almalinux_vault_enable`** *or* **`gpu_validation_pin_kernel_rocky_vault_enable`** (mutually exclusive) |
+
+Automatic **AlmaLinux** vault wiring (imports Alma GPG key and enables BaseOS/AppStream vault for `gpu_validation_pin_kernel_almalinux_vault_minor`, default **`9.4`**):
+
+```
+ansible-playbook -i inventory main.yaml \
+  -e gpu_validation_pin_kernel_enabled=true \
+  -e gpu_validation_pin_kernel_almalinux_vault_enable=true \
+  -e '{"gpu_validation_pin_kernel_rhel_release":"9.4"}'
+```
+
+Automatic **Rocky Linux** vault wiring (respects `gpu_validation_pin_kernel_rocky_vault_minor`, default **`9.4`**, GPG key configurable via `gpu_validation_pin_kernel_rocky_vault_gpg_url`):
+
+```
+ansible-playbook -i inventory main.yaml \
+  -e gpu_validation_pin_kernel_enabled=true \
+  -e gpu_validation_pin_kernel_rocky_vault_enable=true \
+  -e '{"gpu_validation_pin_kernel_rhel_release":"9.4"}'
+```
+
+Discover published **Alma** nevRAs:
+
+```
+sudo dnf --disablerepo='*' --enablerepo='gpu-val-alma-vault-baseos' --enablerepo='gpu-val-alma-vault-appstream' \
+  repoquery 'kernel*427*'
+```
+
+Discover published **Rocky** nevRAs:
+
+```
+sudo dnf --disablerepo='*' --enablerepo='gpu-val-rocky-vault-baseos' --enablerepo='gpu-val-rocky-vault-appstream' \
+  repoquery 'kernel*427*'
+```
+
+**Caveat**: Installing signed **kernel\* RPMs onto a CentOS Stream root filesystem** mixes distros—you may need manual dependency fixes. Safest ergonomics remain a **matching EL cloud image**.
+
 
 Ad-hoc run (facts must report `distribution_version` `9.4`, or force the profile key explicitly):
 

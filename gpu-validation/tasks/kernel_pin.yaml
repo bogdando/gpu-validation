@@ -1,12 +1,23 @@
 ---
 # Optional: boot a pinned RHEL-compatible kernel inside the gpu-validation VM
 # (fixes Stream-style guests on 5.14.0-*.el9 so kernel-devel aligns with EDPM 9.4).
-# Requires DNF repos that actually ship these kernel RPMs (e.g. RHOSP/rhel-tools).
+# Requires DNF repos that ship the listed kernel RPMs (RHOSP entitlement), or enable
+# gpu_validation_pin_kernel_almalinux_vault_enable / gpu_validation_pin_kernel_rocky_vault_enable
+# for community EL vault mirrors (no subscription).
 
 - name: Record currently running kernel
   ansible.builtin.command: uname -r
   register: gpu_val_kernel_running
   changed_when: false
+
+- name: Refuse stacking multiple EL vault-compat repo presets
+  when:
+    - gpu_validation_pin_kernel_almalinux_vault_enable | bool
+    - gpu_validation_pin_kernel_rocky_vault_enable | bool
+  ansible.builtin.fail:
+    msg: >-
+      Enable only one compat vault preset at a time
+      (_almalinux_vault_enable XOR _rocky_vault_enable), both wire BaseOS/AppStream mirrors.
 
 - name: Resolve kernel pin from explicit package list
   ansible.builtin.assert:
@@ -70,7 +81,18 @@
     msg: >-
       Enable either gpu_validation_pin_kernel_rhel_release (e.g. '9.4') /
       factual auto lookup, or set gpu_validation_pin_kernel_packages +
-      gpu_validation_pin_kernel_boot. Repos must expose the RPMs listed in the chosen profile.
+      gpu_validation_pin_kernel_boot. RPMs must exist in enabled DNF repos —
+      use RHOSP entitlement channels, AlmaLinux vault gpu_validation_pin_kernel_almalinux_vault_enable,
+      OR Rocky vault gpu_validation_pin_kernel_rocky_vault_enable, then reconcile package NevRAs
+      (often .alma* / .rocky* dist suffixes).
+
+- name: Optional AlmaLinux vault repositories (RHEL-line kernels without RH subscription)
+  ansible.builtin.import_tasks: kernel_pin_alma_vault.yaml
+  when: gpu_validation_pin_kernel_almalinux_vault_enable | bool
+
+- name: Optional Rocky Linux vault repositories (RHEL-line kernels without RH subscription)
+  ansible.builtin.import_tasks: kernel_pin_rocky_vault.yaml
+  when: gpu_validation_pin_kernel_rocky_vault_enable | bool
 
 - name: Install pinned kernel RPMs plus matching {-devel,-headers}
   ansible.builtin.dnf:

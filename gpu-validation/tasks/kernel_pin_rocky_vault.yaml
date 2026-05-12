@@ -1,0 +1,42 @@
+---
+# Rocky Linux Vault mirrors Enterprise Linux minors (e.g. 9.4) similarly to Alma.
+# Intended for labs: mixing vault kernel RPMs on CentOS Stream is unsupported upstream.
+
+# Avoid community.general.rpm_key: AnsibleTest pods often lack Galaxy-installed collections.
+# So making it installed reliably in AnsibleTest+ci-framework jobs is flaky
+- name: Fetch Rocky Linux vault GPG key for rpm import
+  ansible.builtin.get_url:
+    url: "{{ gpu_validation_pin_kernel_rocky_vault_gpg_url }}"
+    dest: /var/tmp/gpu-validation-rocky-linux-vault-gpg.key
+    mode: "0644"
+    force: false
+
+- name: Import Rocky Linux signing key for vault RPM verification
+  ansible.builtin.command:
+    argv:
+      - rpm
+      - --import
+      - /var/tmp/gpu-validation-rocky-linux-vault-gpg.key
+  changed_when: false
+
+- name: Enable Rocky Linux vault BaseOS (kernel RPMs live here first)
+  ansible.builtin.yum_repository:
+    name: gpu-val-rocky-vault-baseos
+    description: Rocky Linux vault BaseOS (gpu-validation kernel pin)
+    file: gpu-validation-rocky-kernel-compat
+    baseurl: >-
+      https://dl.rockylinux.org/vault/rocky/{{ gpu_validation_pin_kernel_rocky_vault_minor }}/BaseOS/{{ ansible_architecture }}/os/
+    gpgcheck: true
+    gpgkey: "{{ gpu_validation_pin_kernel_rocky_vault_gpg_url }}"
+    enabled: true
+
+- name: Enable Rocky Linux vault AppStream (carry-over deps occasionally land here)
+  ansible.builtin.yum_repository:
+    name: gpu-val-rocky-vault-appstream
+    description: Rocky Linux vault AppStream (gpu-validation kernel pin)
+    file: gpu-validation-rocky-kernel-compat
+    baseurl: >-
+      https://dl.rockylinux.org/vault/rocky/{{ gpu_validation_pin_kernel_rocky_vault_minor }}/AppStream/{{ ansible_architecture }}/os/
+    gpgcheck: true
+    gpgkey: "{{ gpu_validation_pin_kernel_rocky_vault_gpg_url }}"
+    enabled: true
