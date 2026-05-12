@@ -1,0 +1,108 @@
+---
+# Optional: boot a pinned RHEL-compatible kernel inside the gpu-validation VM
+# (fixes Stream-style guests on 5.14.0-*.el9 so kernel-devel aligns with EDPM 9.4).
+# Requires DNF repos that actually ship these kernel RPMs (e.g. RHOSP/rhel-tools).
+
+- name: Record currently running kernel
+  ansible.builtin.command: uname -r
+  register: gpu_val_kernel_running
+  changed_when: false
+
+- name: Resolve kernel pin from explicit package list
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_pin_kernel_boot | length > 0
+    fail_msg: >-
+      gpu_validation_pin_kernel_boot must be set to the exact uname -r string
+      matching the kernels you install (e.g. 5.14.0-427.13.1.el9_4.x86_64).
+  when:
+    - gpu_validation_pin_kernel_packages | length > 0
+
+- name: Set kernel pin specification from overrides
+  when: gpu_validation_pin_kernel_packages | length > 0
+  ansible.builtin.set_fact:
+    _gv_kpin:
+      boot: "{{ gpu_validation_pin_kernel_boot }}"
+      packages: "{{ gpu_validation_pin_kernel_packages }}"
+      devel_packages: "{{ gpu_validation_pin_kernel_devel_packages | default([], true) }}"
+
+- name: Choose profile lookup key when using built-in profiles
+  when: gpu_validation_pin_kernel_packages | length == 0
+  ansible.builtin.set_fact:
+    _gv_kpin_profile_key: >-
+      {{
+        gpu_validation_pin_kernel_rhel_release
+        if (gpu_validation_pin_kernel_rhel_release | default('', true)) | trim | length > 0
+        else (
+          ansible_facts['distribution_version'] | default('')
+          if gpu_validation_pin_kernel_use_facts_distribution_version | bool
+          else ''
+        )
+      }}
+
+- name: Validate profile lookup key exists in configuration map
+  when:
+    - gpu_validation_pin_kernel_packages | length == 0
+    - _gv_kpin_profile_key | trim | length > 0
+  ansible.builtin.assert:
+    that:
+      - _gv_kpin_profile_key in gpu_validation_pin_kernel_profiles
+
+- name: Validate selected profile declares kernel packages to install
+  when:
+    - gpu_validation_pin_kernel_packages | length == 0
+    - _gv_kpin_profile_key | trim | length > 0
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_pin_kernel_profiles[_gv_kpin_profile_key]['packages'] | length > 0
+
+- name: Set kernel pin specification from RHEL/minor profiles map
+  when:
+    - gpu_validation_pin_kernel_packages | length == 0
+    - _gv_kpin_profile_key | trim | length > 0
+    - _gv_kpin_profile_key in gpu_validation_pin_kernel_profiles
+  ansible.builtin.set_fact:
+    _gv_kpin: "{{ gpu_validation_pin_kernel_profiles[_gv_kpin_profile_key] }}"
+
+- name: Fail if kernel pinning is enabled but no specification was constructed
+  when: _gv_kpin is not defined
+  ansible.builtin.fail:
+    msg: >-
+      Enable either gpu_validation_pin_kernel_rhel_release (e.g. '9.4') /
+      factual auto lookup, or set gpu_validation_pin_kernel_packages +
+      gpu_validation_pin_kernel_boot. Repos must expose the RPMs listed in the chosen profile.
+
+- name: Install pinned kernel RPMs plus matching {-devel,-headers}
+  ansible.builtin.dnf:
+    use_backend: dnf4
+    name: "{{ (_gv_kpin.packages | default([], true))
+      + (_gv_kpin.devel_packages | default([], true)) }}"
+    state: present
+
+- name: Point default bootloader entry at pinned kernel
+  ansible.builtin.command:
+    argv:
+      - grubby
+      - "--set-default=/boot/vmlinuz-{{ (_gv_kpin.boot | trim) }}"
+  changed_when: true
+
+- name: Reboot VM to activate pinned kernel
+  when:
+    - gpu_validation_pin_kernel_reboot | bool
+    - (gpu_val_kernel_running.stdout | trim) != ((_gv_kpin.boot | trim))
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ gpu_validation_pin_kernel_reboot_timeout }}"
+
+- name: Re-check running kernel matches pin target
+  ansible.builtin.command: uname -r
+  register: gpu_val_kernel_running_after
+  changed_when: false
+
+- name: Assert pinned kernel booted successfully
+  ansible.builtin.assert:
+    that:
+      - (gpu_val_kernel_running_after.stdout | trim) == ((_gv_kpin.boot | trim))
+    fail_msg: >-
+      Expected kernel {{ (_gv_kpin.boot | trim) }} but VM is running
+      {{ gpu_val_kernel_running_after.stdout | trim }}. Check GRUB, kernel install,
+      and that repositories ship the pinned packages.

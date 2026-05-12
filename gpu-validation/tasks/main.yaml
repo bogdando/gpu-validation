@@ -3,6 +3,11 @@
   become: true
   ansible.builtin.import_tasks: setup.yaml
 
+- name: Optional guest kernel pinning (Stream → RHEL 9.x EUS line for driver builds)
+  become: true
+  ansible.builtin.import_tasks: kernel_pin.yaml
+  when: gpu_validation_pin_kernel_enabled | bool
+
 - name: Nvidia Setup (Use the edpm_accel_drivers role to install the NVIDIA driver in our VM)
   ansible.builtin.include_role:
     name: osp.edpm.edpm_accel_drivers

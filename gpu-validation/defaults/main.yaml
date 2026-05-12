@@ -77,3 +77,30 @@ gpu_validation_workload_shm_size: "--shm-size=4g"
 gpu_validation_workload_additional_env: "--env=HF_HUB_OFFLINE=0 --env=VLLM_NO_USAGE_STATS=1"
 # [string] vLLM API URL
 gpu_validation_vllm_api_url: "http://127.0.0.1:8000"
+
+# ---- Optional: align guest kernel with EDPM / RHOSP RHEL minors (ad-hoc Stream fix) ----
+# Installs pinned kernel + matching {-devel,-headers}, sets GRUB default, reboots, then continues to NVIDIA/DKMS.
+gpu_validation_pin_kernel_enabled: false
+# If true, use ansible_facts['distribution_version'] (typically "9.4" on RHEL) when rhel_release is empty.
+gpu_validation_pin_kernel_use_facts_distribution_version: true
+# Force profile lookup key — e.g. "9.4" — when facts are wrong on Stream images ("9").
+gpu_validation_pin_kernel_rhel_release: ""
+# Overrides profile map when non-empty: exact dnf package names NevRAs lists.
+gpu_validation_pin_kernel_packages: []
+gpu_validation_pin_kernel_devel_packages: []
+# Required when using overrides — must equal uname -r after reboot (includes .x86_64).
+gpu_validation_pin_kernel_boot: ""
+gpu_validation_pin_kernel_reboot: true
+gpu_validation_pin_kernel_reboot_timeout: 900
+# Map of pin specifications; tune NEVRAs when your SOE uses a newer 427.* build than below.
+gpu_validation_pin_kernel_profiles:
+  "9.4":
+    boot: "5.14.0-427.13.1.el9_4.x86_64"
+    packages:
+      - kernel-5.14.0-427.13.1.el9_4
+      - kernel-core-5.14.0-427.13.1.el9_4
+      - kernel-modules-5.14.0-427.13.1.el9_4
+      - kernel-modules-core-5.14.0-427.13.1.el9_4
+    devel_packages:
+      - kernel-devel-5.14.0-427.13.1.el9_4
+      - kernel-headers-5.14.0-427.13.1.el9_4
