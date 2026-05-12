@@ -1,0 +1,31 @@
+---
+# AlmaLinux Vault carries RHEL-rebuild kernels for a minor (e.g. 9.4) without attaching
+# a Red Hat entitlement. Intended for labs only: mixing these RPMs on CentOS Stream
+# userspace is unofficial—expect to resolve occasional dependency quirks by hand.
+
+- name: Import AlmaLinux GPG key (required for gpgcheck)
+  community.general.rpm_key:
+    state: present
+    key: https://repo.almalinux.org/almalinux/RPM-GPG-KEY-AlmaLinux
+
+- name: Enable AlmaLinux vault BaseOS (kernel packages)
+  ansible.builtin.yum_repository:
+    name: gpu-val-alma-vault-baseos
+    description: AlmaLinux vault BaseOS (gpu-validation kernel pin)
+    file: gpu-validation-kernel-compat
+    baseurl: >-
+      https://repo.almalinux.org/vault/{{ gpu_validation_pin_kernel_almalinux_vault_minor }}/BaseOS/{{ ansible_architecture }}/os/
+    gpgcheck: true
+    gpgkey: https://repo.almalinux.org/almalinux/RPM-GPG-KEY-AlmaLinux
+    enabled: true
+
+- name: Enable AlmaLinux vault AppStream (some kernel-related deps ship here)
+  ansible.builtin.yum_repository:
+    name: gpu-val-alma-vault-appstream
+    description: AlmaLinux vault AppStream (gpu-validation kernel pin)
+    file: gpu-validation-kernel-compat
+    baseurl: >-
+      https://repo.almalinux.org/vault/{{ gpu_validation_pin_kernel_almalinux_vault_minor }}/AppStream/{{ ansible_architecture }}/os/
+    gpgcheck: true
+    gpgkey: https://repo.almalinux.org/almalinux/RPM-GPG-KEY-AlmaLinux
+    enabled: true
