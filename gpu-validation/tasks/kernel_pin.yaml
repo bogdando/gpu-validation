@@ -126,7 +126,9 @@
   when: not _gv_kpin_vmlinuz_stat.stat.exists
   ansible.builtin.find:
     paths: /boot
-    patterns: "vmlinuz-{{ (_gv_kpin.boot | trim) }}*"
+    patterns:
+      - "vmlinuz-{{ (_gv_kpin.boot | trim) }}*"
+      - "vmlinuz-{{ (_gv_kpin.boot | trim | regex_replace('\.(x86_64|aarch64|s390x|ppc64le)$', '')) }}*"
     file_type: file
   register: _gv_kpin_vmlinuz_find
 
@@ -143,9 +145,11 @@
     - (_gv_kpin_vmlinuz_find.matched | default(0) | int) == 0
   ansible.builtin.shell:
     executable: /bin/bash
+    environment:
+      # Avoid embedding Jinja in bash ${#...} (ansible treats {# as jinja comment starter)
+      GV_VMLINUZ_PREFIX: "{{ (_gv_kpin.boot | trim | regex_replace('\.(x86_64|aarch64|s390x|ppc64le)$', '')) }}"
     cmd: |
       set -euo pipefail
-      # RHEL-ish split: /boot/vmlinuz-* ships in kernel-core, not necessarily in meta "kernel-{ver}".
       for spec in {% for pin_pkg in _gv_kpin.packages %}{{ pin_pkg | quote }} {% endfor %}; do
         case "$spec" in
           kernel-devel*|kernel-headers*) continue ;;
@@ -160,12 +164,13 @@
             ;;
         esac
       done
-      # Any on-disk kernel image matching boot string prefix (drops .arch suffix from profile boot)
-      PREFIX="{{ (_gv_kpin.boot | trim | regex_replace('\.(x86_64|aarch64|s390x|ppc64le)$', '')) }}"
       shopt -s nullglob
-      declare -a c=(/boot/vmlinuz-"${PREFIX}"*)
-      if [[ ${#c[@]} -gt 0 ]]; then
-        printf '%s\n' "${c[-1]}"
+      last=""
+      for p in /boot/vmlinuz-"${GV_VMLINUZ_PREFIX}"*; do
+        last="$p"
+      done
+      if [[ -n "$last" ]]; then
+        printf '%s\n' "$last"
         exit 0
       fi
       exit 1
