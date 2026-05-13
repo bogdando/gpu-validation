@@ -145,21 +145,29 @@
     executable: /bin/bash
     cmd: |
       set -euo pipefail
+      # RHEL-ish split: /boot/vmlinuz-* ships in kernel-core, not necessarily in meta "kernel-{ver}".
       for spec in {% for pin_pkg in _gv_kpin.packages %}{{ pin_pkg | quote }} {% endfor %}; do
         case "$spec" in
           kernel-devel*|kernel-headers*) continue ;;
-          kernel-[0-9]*)
-            if nevra=$(rpm -q "$spec" 2>/dev/null); then
-              while IFS= read -r line; do
-                if [[ "$line" == /boot/vmlinuz-* ]]; then
-                  printf '%s\n' "$line"
-                  exit 0
-                fi
-              done < <(rpm -ql "$nevra")
+          kernel-modules-[0-9]*|kernel-modules-core-[0-9]*) continue ;;
+          kernel-[0-9]*|kernel-core-[0-9]*)
+            nevra=$(rpm -q "$spec" 2>/dev/null) || continue
+            path="$(rpm -ql "$nevra" 2>/dev/null | grep -xm1 '^/boot/vmlinuz-' || true)"
+            if [[ -n "${path:-}" ]]; then
+              printf '%s\n' "$path"
+              exit 0
             fi
             ;;
         esac
       done
+      # Any on-disk kernel image matching boot string prefix (drops .arch suffix from profile boot)
+      PREFIX="{{ (_gv_kpin.boot | trim | regex_replace('\.(x86_64|aarch64|s390x|ppc64le)$', '')) }}"
+      shopt -s nullglob
+      declare -a c=(/boot/vmlinuz-"${PREFIX}"*)
+      if [[ ${#c[@]} -gt 0 ]]; then
+        printf '%s\n' "${c[-1]}"
+        exit 0
+      fi
       exit 1
   register: _gv_kpin_vmlinuz_rpm
   changed_when: false
