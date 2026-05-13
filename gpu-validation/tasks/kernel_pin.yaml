@@ -110,17 +110,92 @@
       + (_gv_kpin.devel_packages | default([], true)) }}"
     state: present
 
+# grubby rejects paths that do not exist. Rocky/alma kernels often use a slightly
+# different /boot/vmlinuz-* basename than gpu_validation_profiles[*].boot.
+- name: Check whether exact profile boot maps to installed vmlinuz
+  ansible.builtin.stat:
+    path: "/boot/vmlinuz-{{ (_gv_kpin.boot | trim) }}"
+  register: _gv_kpin_vmlinuz_stat
+
+- name: Use exact profile vmlinuz path when it exists on disk
+  when: _gv_kpin_vmlinuz_stat.stat.exists
+  ansible.builtin.set_fact:
+    _gv_pin_vmlinuz_path: "/boot/vmlinuz-{{ (_gv_kpin.boot | trim) }}"
+
+- name: Glob /boot/vmlinuz-* when profile boot string does not match on-disk name
+  when: not _gv_kpin_vmlinuz_stat.stat.exists
+  ansible.builtin.find:
+    paths: /boot
+    patterns: "vmlinuz-{{ (_gv_kpin.boot | trim) }}*"
+    file_type: file
+  register: _gv_kpin_vmlinuz_find
+
+- name: Pick matching vmlinuz from glob (single or lexicographic last)
+  when:
+    - not _gv_kpin_vmlinuz_stat.stat.exists
+    - (_gv_kpin_vmlinuz_find.matched | default(0) | int) > 0
+  ansible.builtin.set_fact:
+    _gv_pin_vmlinuz_path: "{{ (_gv_kpin_vmlinuz_find.files | sort(attribute='path') | last).path }}"
+
+- name: Last-resort resolve vmlinuz from kernel-* RPM file lists
+  when:
+    - not _gv_kpin_vmlinuz_stat.stat.exists
+    - (_gv_kpin_vmlinuz_find.matched | default(0) | int) == 0
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -euo pipefail
+      for spec in {% for pin_pkg in _gv_kpin.packages %}{{ pin_pkg | quote }} {% endfor %}; do
+        case "$spec" in
+          kernel-devel*|kernel-headers*) continue ;;
+          kernel-[0-9]*)
+            if nevra=$(rpm -q "$spec" 2>/dev/null); then
+              while IFS= read -r line; do
+                if [[ "$line" == /boot/vmlinuz-* ]]; then
+                  printf '%s\n' "$line"
+                  exit 0
+                fi
+              done < <(rpm -ql "$nevra")
+            fi
+            ;;
+        esac
+      done
+      exit 1
+  register: _gv_kpin_vmlinuz_rpm
+  changed_when: false
+
+- name: Set vmlinuz path from rpm payload discovery
+  when:
+    - not _gv_kpin_vmlinuz_stat.stat.exists
+    - (_gv_kpin_vmlinuz_find.matched | default(0) | int) == 0
+    - _gv_kpin_vmlinuz_rpm.rc == 0
+  ansible.builtin.set_fact:
+    _gv_pin_vmlinuz_path: "{{ _gv_kpin_vmlinuz_rpm.stdout | trim }}"
+
+- name: Fail when pinned kernel vmlinuz cannot be located for grubby
+  ansible.builtin.fail:
+    msg: >-
+      Could not resolve /boot/vmlinuz-* for pin target {{ _gv_kpin.boot | trim }}.
+      Installed kernel RPMs may not match gpu_validation_pin_kernel_profiles / packages.
+  when: >-
+    ((_gv_pin_vmlinuz_path is not defined)
+    or ((_gv_pin_vmlinuz_path | default('', true) | trim) | length == 0))
+
+- name: Derive effective uname -r suffix from bootloader vmlinuz path
+  ansible.builtin.set_fact:
+    _gv_kpin_expected_boot: "{{ (_gv_pin_vmlinuz_path | basename | regex_replace('^vmlinuz-', '')) }}"
+
 - name: Point default bootloader entry at pinned kernel
   ansible.builtin.command:
     argv:
       - grubby
-      - "--set-default=/boot/vmlinuz-{{ (_gv_kpin.boot | trim) }}"
+      - "--set-default={{ _gv_pin_vmlinuz_path }}"
   changed_when: true
 
 - name: Reboot VM to activate pinned kernel
   when:
     - gpu_validation_pin_kernel_reboot | bool
-    - (gpu_val_kernel_running.stdout | trim) != ((_gv_kpin.boot | trim))
+    - (gpu_val_kernel_running.stdout | trim) != (_gv_kpin_expected_boot | trim)
   ansible.builtin.reboot:
     reboot_timeout: "{{ gpu_validation_pin_kernel_reboot_timeout }}"
 
@@ -132,8 +207,8 @@
 - name: Assert pinned kernel booted successfully
   ansible.builtin.assert:
     that:
-      - (gpu_val_kernel_running_after.stdout | trim) == ((_gv_kpin.boot | trim))
+      - (gpu_val_kernel_running_after.stdout | trim) == ((_gv_kpin_expected_boot | trim))
     fail_msg: >-
-      Expected kernel {{ (_gv_kpin.boot | trim) }} but VM is running
+      Expected kernel {{ (_gv_kpin_expected_boot | trim) }} but VM is running
       {{ gpu_val_kernel_running_after.stdout | trim }}. Check GRUB, kernel install,
-      and that repositories ship the pinned packages.
+      and profile gpu_validation_pin_kernel_profiles boot string vs RPM layout.
