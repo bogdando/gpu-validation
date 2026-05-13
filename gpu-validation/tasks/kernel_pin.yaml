@@ -103,12 +103,31 @@
   ansible.builtin.import_tasks: kernel_pin_rocky_vault.yaml
   when: gpu_validation_pin_kernel_rocky_vault_enable | bool
 
+- name: Refresh DNF metadata after vault repo snippets were written
+  when: >-
+    gpu_validation_pin_kernel_almalinux_vault_enable | bool
+    or gpu_validation_pin_kernel_rocky_vault_enable | bool
+  ansible.builtin.dnf:
+    use_backend: dnf4
+    update_cache: true
+
 - name: Install pinned kernel RPMs plus matching {-devel,-headers}
   ansible.builtin.dnf:
     use_backend: dnf4
     name: "{{ (_gv_kpin.packages | default([], true))
       + (_gv_kpin.devel_packages | default([], true)) }}"
     state: present
+  register: _gv_kpin_dnf
+
+# dnf must see fresh repodata after vault repos are added; stale cache can omit
+# kernel-{,core,modules*} NevRAs while other repos still install -devel/-headers.
+- name: Verify every pinned kernel binary spec from _gv_kpin.packages exists in RPM DB
+  ansible.builtin.command:
+    argv: [rpm, -q, "{{ item }}"]
+  loop: "{{ (_gv_kpin.packages | default([], true)) }}"
+  when: >-
+    ('kernel-devel' not in item) and ('kernel-headers' not in item)
+  changed_when: false
 
 # grubby rejects paths that do not exist. Rocky/alma kernels often use a slightly
 # different /boot/vmlinuz-* basename than gpu_validation_profiles[*].boot.
@@ -168,7 +187,9 @@
   ansible.builtin.fail:
     msg: >-
       Could not resolve /boot/vmlinuz-* for pin target {{ _gv_kpin.boot | trim }}.
-      Installed kernel RPMs may not match gpu_validation_pin_kernel_profiles / packages.
+      If dnf listed only kernel-devel/kernel-headers installed, kernel-core/kernel was
+      not in RPM DB despite state:present — often stale DNF cache right after vault
+      repos were added (fixed by dnf update_cache step), otherwise repo/NevRA mismatch.
   when: >-
     ((_gv_pin_vmlinuz_path is not defined)
     or ((_gv_pin_vmlinuz_path | default('', true) | trim) | length == 0))
