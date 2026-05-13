@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Offline tests for the last-resort vmlinuz resolver in gpu-validation/tasks/kernel_pin.yaml.
-# Keep resolver logic here in sync with that task's shell body.
+# Regression tests for gpu-validation/files/scripts/kernel_pin_last_resort_vmlinuz_resolve.sh
+# (invoked from gpu-validation/tasks/kernel_pin.yml via ansible.builtin.script).
 #
-# From repo checkout root:
+# Run from anywhere:
 #   bash gpu-validation/scripts/test_kernel_pin_vmlinuz_resolve.sh
 set -euo pipefail
 
@@ -16,103 +16,29 @@ pass() {
   printf 'OK: %s\n' "$1"
 }
 
-# KP_BOOT_MOUNT: where vmlinuz files live (default /boot). rpm -ql lines are rewritten
-# from /boot/... into ${KP_BOOT_MOUNT}/... before printing.
-#
-# Args: GV_BOOT_TAG GV_VMLINUZ_PREFIX [spec ...]
-last_resort_resolve_vmlinuz() {
-  local GV_BOOT_TAG="${1:?}"
-  local GV_VMLINUZ_PREFIX="${2:?}"
-  shift 2 || true
-  local -a specs=("$@")
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROLE_ROOT="$(cd "${HERE}/.." && pwd)"
+RESOLVER="${ROLE_ROOT}/files/scripts/kernel_pin_last_resort_vmlinuz_resolve.sh"
 
-  local BOOT_MOUNT="${KP_BOOT_MOUNT:-/boot}"
-  local spec rpm_out n path rpm_fb last bn p
+[[ -x "${RESOLVER}" || -r "${RESOLVER}" ]] || fail "missing resolver at ${RESOLVER}"
 
-  map_boot_path() {
-    local fp="${1:?}"
-    if [[ "${fp}" == /boot/* ]]; then
-      printf '%s\n' "${BOOT_MOUNT}/${fp#/boot/}"
-      return 0
-    fi
-    printf '%s\n' "${fp}"
-  }
-
-  for spec in "${specs[@]}"; do
-    case "$spec" in
-      kernel-devel* | kernel-headers*) continue ;;
-      kernel-modules-[0-9]* | kernel-modules-core-[0-9]*) continue ;;
-      kernel-[0-9]* | kernel-core-[0-9]*) ;;
-      *) continue ;;
-    esac
-
-    rpm_out=""
-    if rpm_out=$(rpm -q "$spec" 2>/dev/null); then
-      :
-    else
-      rpm_out=$(rpm -qa "${spec}*" 2>/dev/null | grep -E '^(kernel|kernel-core)-' || true)
-    fi
-    [[ -z "${rpm_out}" ]] && continue
-
-    while IFS= read -r n; do
-      [[ -z "${n}" ]] && continue
-      path="$(rpm -ql "$n" 2>/dev/null \
-        | grep -E '^/boot/vmlinuz-' \
-        | grep -Ev '\.(hmac|debug|gz)(\.|$)' \
-        | head -n1 || true)"
-      if [[ -n "${path:-}" ]]; then
-        map_boot_path "${path}"
-        return 0
-      fi
-    done <<< "$(printf '%s\n' "${rpm_out}")"
-  done
-
-  if [[ -n "${GV_VMLINUZ_PREFIX}" ]]; then
-    rpm_fb=$(rpm -qa 'kernel-core-*' 2>/dev/null | grep -F "${GV_VMLINUZ_PREFIX}" || true)
-    while IFS= read -r n; do
-      [[ -z "${n}" ]] && continue
-      path="$(rpm -ql "$n" 2>/dev/null \
-        | grep -E '^/boot/vmlinuz-' \
-        | grep -Ev '\.(hmac|debug|gz)(\.|$)' \
-        | head -n1 || true)"
-      if [[ -n "${path:-}" ]]; then
-        map_boot_path "${path}"
-        return 0
-      fi
-    done <<< "$(printf '%s\n' "${rpm_fb}")"
-  fi
-
-  shopt -s nullglob
-  last=""
-  for p in "${BOOT_MOUNT}/vmlinuz-${GV_BOOT_TAG}"* "${BOOT_MOUNT}/vmlinuz-${GV_VMLINUZ_PREFIX}"*; do
-    case "${p}" in *rescue* | *.hmac | *.debug) continue ;; esac
-    [[ -e "${p}" ]] || continue
-    last="${p}"
-  done
-
-  if [[ -z "${last}" ]]; then
-    for p in "${BOOT_MOUNT}/vmlinuz-"*; do
-      bn="${p#"${BOOT_MOUNT}"/vmlinuz-}"
-      case "${bn}" in *rescue* | *.hmac | *.debug) continue ;; esac
-      [[ -e "${p}" ]] || continue
-      if [[ "${bn}" == "${GV_BOOT_TAG}"* || "${bn}" == "${GV_VMLINUZ_PREFIX}"* ]]; then
-        last="${p}"
-      fi
-    done
-  fi
-  shopt -u nullglob
-
-  if [[ -n "${last}" ]]; then
-    printf '%s\n' "${last}"
-    return 0
-  fi
-  return 1
+b64_specs() {
+  printf '%s\n' "$@" | base64 | tr -d '\n'
 }
 
-# --- Tests --------------------------------------------------------------------
-
-td="$(mktemp -d)"
-trap 'rm -rf "${td}"' EXIT
+run_resolver_env() {
+  local boot_tag="${1:?}"
+  local vmlinuz_prefix="${2:?}"
+  local boot_mount="${3:?}"
+  shift 3
+  export GV_BOOT_TAG="${boot_tag}"
+  export GV_VMLINUZ_PREFIX="${vmlinuz_prefix}"
+  export KP_BOOT_MOUNT="${boot_mount}"
+  export KERNEL_PIN_PACKAGES_B64
+  KERNEL_PIN_PACKAGES_B64="$(b64_specs "$@")"
+  unset KERNEL_PIN_VMLINUZ_RESOLVE_DEBUG || true
+  bash "${RESOLVER}"
+}
 
 specs=(
   kernel-5.14.0-427.42.1.el9_4
@@ -124,11 +50,13 @@ specs=(
 BOOT_TAG="5.14.0-427.42.1.el9_4.x86_64"
 PREFIX_SCAN="5.14.0-427.42.1"
 
-# Test 1: rpm -q fails; rpm -qa glob works; rpm -ql lists hmac before real vmlinuz.
+td="$(mktemp -d)"
+trap 'rm -rf "${td}"' EXIT
+
 (
-  export KP_BOOT_MOUNT="${td}/t1/boot"
-  mkdir -p "${KP_BOOT_MOUNT}"
-  touch "${KP_BOOT_MOUNT}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+  boot="${td}/t1/boot"
+  mkdir -p "${boot}"
+  touch "${boot}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
 
   rpm() {
     case "$1" in
@@ -145,44 +73,39 @@ PREFIX_SCAN="5.14.0-427.42.1"
 EOF
         ;;
       *)
-        fail "unexpected rpm argv: $*"
+        fail "test1 unexpected rpm argv: $*"
         ;;
     esac
   }
   export -f rpm
 
-  out="$(last_resort_resolve_vmlinuz "${BOOT_TAG}" "${PREFIX_SCAN}" "${specs[@]}")"
-  want="${KP_BOOT_MOUNT}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+  out="$(run_resolver_env "${BOOT_TAG}" "${PREFIX_SCAN}" "${boot}" "${specs[@]}")"
+  want="${boot}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
   [[ "${out}" == "${want}" ]] || fail "test1 path: got ${out}, want ${want}"
 )
-pass "rpm qa + ql skips hmac; paths map into KP_BOOT_MOUNT"
+pass "script: rpm qa + ql skips hmac; requires on-disk vmlinuz"
 
-# Test 2: RPM yields nothing usable; prefixed globs recover the right file.
 (
-  export KP_BOOT_MOUNT="${td}/t2/boot"
-  mkdir -p "${KP_BOOT_MOUNT}"
-  touch "${KP_BOOT_MOUNT}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+  boot="${td}/t2/boot"
+  mkdir -p "${boot}"
+  touch "${boot}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
 
-  rpm() { return 1; }
+  rpm() { return 127; }
   export -f rpm
 
-  out="$(last_resort_resolve_vmlinuz "${BOOT_TAG}" "${PREFIX_SCAN}" "${specs[@]}")"
-  want="${KP_BOOT_MOUNT}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+  out="$(run_resolver_env "${BOOT_TAG}" "${PREFIX_SCAN}" "${boot}" "${specs[@]}")"
+  want="${boot}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
   [[ "${out}" == "${want}" ]] || fail "test2 path: got ${out}, want ${want}"
 )
-pass "filesystem glob finds vmlinuz when RPM queries fail"
+pass "script: filesystem glob succeeds when RPM fails"
 
-# Test 3: spec wildcards dead; kernel-core-* NevRA substring fallback finds ql output.
 (
-  export KP_BOOT_MOUNT="${td}/t3/boot"
-  mkdir -p "${KP_BOOT_MOUNT}"
-  touch "${KP_BOOT_MOUNT}/vmlinuz-5.14.0-427.42.1.el9_64.x86_64"
+  boot="${td}/t3/boot"
+  mkdir -p "${boot}"
+  touch "${boot}/vmlinuz-5.14.0-427.42.1.el9_64.x86_64"
 
   rpm() {
     case "$1" in
-      -q)
-        return 1
-        ;;
       -qa)
         if [[ "${2:-}" == 'kernel-core-*' ]]; then
           printf '%s\n' "kernel-core-5.14.0-427.42.1.el9_64.x86_64"
@@ -193,16 +116,52 @@ pass "filesystem glob finds vmlinuz when RPM queries fail"
       -ql)
         printf '%s\n' "/boot/vmlinuz-5.14.0-427.42.1.el9_64.x86_64"
         ;;
+      -q)
+        return 1
+        ;;
       *)
-        fail "unexpected rpm argv: $*"
+        fail "test3 unexpected rpm argv: $*"
         ;;
     esac
   }
   export -f rpm
 
-  out="$(last_resort_resolve_vmlinuz "${BOOT_TAG}" "${PREFIX_SCAN}" "${specs[@]}")"
-  want="${KP_BOOT_MOUNT}/vmlinuz-5.14.0-427.42.1.el9_64.x86_64"
+  out="$(run_resolver_env "${BOOT_TAG}" "${PREFIX_SCAN}" "${boot}" "${specs[@]}")"
+  want="${boot}/vmlinuz-5.14.0-427.42.1.el9_64.x86_64"
   [[ "${out}" == "${want}" ]] || fail "test3 path: got ${out}, want ${want}"
 )
+pass "script: scans kernel-core-* when substring filters fall back to full list"
 
-pass "kernel-core-* NevRA substring fallback resolves ql payloads"
+(
+  boot="${td}/t4/boot"
+  mkdir -p "${boot}"
+  touch "${boot}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+
+  rpm() {
+    case "$1" in
+      -q)
+        return 1
+        ;;
+      -qa)
+        printf '%s\n' "kernel-core-5.14.0-427.42.1.el9_4.x86_64"
+        ;;
+      -ql)
+        printf '%s\n' "/boot/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+        ;;
+      *)
+        fail "test4 unexpected rpm argv: $*"
+        ;;
+    esac
+  }
+  export -f rpm
+
+  export GV_BOOT_TAG="${BOOT_TAG}"
+  export GV_VMLINUZ_PREFIX="${PREFIX_SCAN}"
+  export KP_BOOT_MOUNT="${boot}"
+  export KERNEL_PIN_PACKAGES_B64
+  KERNEL_PIN_PACKAGES_B64="$(printf '%s\n' "${specs[@]}" | base64 | tr -d '\n')"
+  out="$(bash "${RESOLVER}")"
+  want="${boot}/vmlinuz-5.14.0-427.42.1.el9_4.x86_64"
+  [[ "${out}" == "${want}" ]] || fail "test4 path: got ${out}, want ${want}"
+)
+pass "script: KERNEL_PIN_PACKAGES_B64 decodes multi-line specs"
