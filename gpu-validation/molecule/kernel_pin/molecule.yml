@@ -1,0 +1,32 @@
+---
+dependency:
+  name: galaxy
+  enabled: false
+# Molecule ≥26 registers the delegated/localhost driver as "default".
+driver:
+  name: default
+platforms:
+  - name: instance
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: ""
+  inventory:
+    host_vars:
+      instance:
+        ansible_connection: local
+        ansible_python_interpreter: auto_silent
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+scenario:
+  name: kernel_pin
+  test_sequence:
+    - dependency
+    - syntax
+    - converge
+    - idempotence
+    - verify
+verifier:
+  name: ansible

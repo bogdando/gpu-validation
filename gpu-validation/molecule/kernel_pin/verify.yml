@@ -1,0 +1,14 @@
+---
+# Runs mocked-RPM regressions shipped with the role (offline; no VM / OpenStack needed).
+- name: Verify kernel pin vmlinuz resolver (offline regression)
+  hosts: instance
+  gather_facts: false
+  vars:
+    _role_root: "{{ playbook_dir | dirname | dirname }}"
+  tasks:
+    - name: Run mocked resolver regression script
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ _role_root }}/scripts/test_kernel_pin_vmlinuz_resolve.sh"
+      changed_when: false

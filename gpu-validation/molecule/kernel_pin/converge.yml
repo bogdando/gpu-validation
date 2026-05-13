@@ -1,0 +1,29 @@
+---
+# Smoke-check files present before verifier runs mocked RPM regression tests.
+- name: Converge (kernel-pin helpers)
+  hosts: instance
+  gather_facts: false
+  vars:
+    _role_root: "{{ playbook_dir | dirname | dirname }}"
+  tasks:
+    - ansible.builtin.stat:
+        path: "{{ _role_root }}/files/scripts/kernel_pin_last_resort_vmlinuz_resolve.sh"
+      register: _resolver
+
+    - ansible.builtin.stat:
+        path: "{{ _role_root }}/scripts/test_kernel_pin_vmlinuz_resolve.sh"
+      register: _tests
+
+    - ansible.builtin.assert:
+        that:
+          - _resolver.stat.exists | bool
+          - _resolver.stat.isreg | bool
+          - _tests.stat.exists | bool
+          - _tests.stat.isreg | bool
+
+    - ansible.builtin.command:
+        argv:
+          - bash
+          - -n
+          - "{{ _role_root }}/files/scripts/kernel_pin_last_resort_vmlinuz_resolve.sh"
+      changed_when: false

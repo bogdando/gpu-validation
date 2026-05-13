@@ -3,7 +3,7 @@
 # Regression tests for gpu-validation/files/scripts/kernel_pin_last_resort_vmlinuz_resolve.sh
 # (invoked from gpu-validation/tasks/kernel_pin.yml via ansible.builtin.script).
 #
-# Run from anywhere:
+# Molecule (scenario kernel_pin / verify step) runs this script; you can also invoke it directly:
 #   bash gpu-validation/scripts/test_kernel_pin_vmlinuz_resolve.sh
 set -euo pipefail
 

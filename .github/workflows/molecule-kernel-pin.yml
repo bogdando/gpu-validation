@@ -1,0 +1,27 @@
+---
+name: Molecule (kernel pin helpers)
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  molecule-kernel-pin:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: gpu-validation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Molecule tooling
+        run: pip install -r ../molecule-requirements.txt
+
+      - name: Molecule kernel_pin scenario (delegated / offline)
+        run: molecule test -s kernel_pin
