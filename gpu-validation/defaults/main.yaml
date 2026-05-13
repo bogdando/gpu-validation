@@ -101,6 +101,8 @@ gpu_validation_pin_kernel_devel_packages: []
 gpu_validation_pin_kernel_boot: ""
 gpu_validation_pin_kernel_reboot: true
 gpu_validation_pin_kernel_reboot_timeout: 900
+# When true, resolver script prints /boot listing + rpm -qa kernel* to stderr before exit 1.
+gpu_validation_pin_kernel_vmlinuz_resolve_debug: false
 # Map of pin specifications: add keys as needed ("9.4-alma", …). Tune NVR when SOE bumps 427.*
 gpu_validation_pin_kernel_profiles:
   # RHOSP entitlement / osptrunk — exact GA NEVRA your repos must expose

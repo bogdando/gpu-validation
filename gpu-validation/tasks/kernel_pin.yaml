@@ -148,9 +148,11 @@
     GV_VMLINUZ_PREFIX: '{{ (_gv_kpin.boot | trim | regex_replace("\.(x86_64|aarch64|s390x|ppc64le)$", "")) }}'
     KP_BOOT_MOUNT: /boot
     KERNEL_PIN_PACKAGES_B64: "{{ (_gv_kpin.packages | join('\n')) | b64encode }}"
+    KERNEL_PIN_VMLINUZ_RESOLVE_DEBUG: "{{ '1' if gpu_validation_pin_kernel_vmlinuz_resolve_debug | bool else '0' }}"
   ansible.builtin.script:
     executable: /bin/bash
-    cmd: "{{ role_path }}/files/scripts/kernel_pin_last_resort_vmlinuz_resolve.sh"
+    # Path is relative to this role's files/ (avoids relying on role_path on the controller).
+    cmd: scripts/kernel_pin_last_resort_vmlinuz_resolve.sh
   register: _gv_kpin_vmlinuz_rpm
   changed_when: false
 
