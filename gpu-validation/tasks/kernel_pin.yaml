@@ -144,43 +144,82 @@
     - not _gv_kpin_vmlinuz_stat.stat.exists
     - (_gv_kpin_vmlinuz_find.matched | default(0) | int) == 0
   environment:
-    # Profile package names often omit ".arch"; rpm -q needs a matching NevRA wildcard.
     GV_BOOT_TAG: '{{ (_gv_kpin.boot | trim) }}'
     GV_VMLINUZ_PREFIX: '{{ (_gv_kpin.boot | trim | regex_replace("\.(x86_64|aarch64|s390x|ppc64le)$", "")) }}'
+    KP_BOOT_MOUNT: /boot
   ansible.builtin.shell:
     executable: /bin/bash
     cmd: |
       set -euo pipefail
+      BOOT_MOUNT="${KP_BOOT_MOUNT:-/boot}"
       for spec in {% for pin_pkg in _gv_kpin.packages %}{{ pin_pkg | quote }} {% endfor %}; do
         case "$spec" in
           kernel-devel*|kernel-headers*) continue ;;
           kernel-modules-[0-9]*|kernel-modules-core-[0-9]*) continue ;;
           kernel-[0-9]*|kernel-core-[0-9]*)
             rpm_out=""
-            # Exact NevRA match OR any installed package starting with this spec (e.g. +.x86_64).
             if rpm_out=$(rpm -q "$spec" 2>/dev/null); then
               :
             else
-              rpm_out=$(rpm -qa "${spec}*" 2>/dev/null | grep -E '^(kernel|kernel-core)-[0-9]' || true)
+              rpm_out=$(rpm -qa "${spec}*" 2>/dev/null | grep -E '^(kernel|kernel-core)-' || true)
             fi
             [[ -z "${rpm_out}" ]] && continue
             while IFS= read -r n; do
               [[ -z "${n}" ]] && continue
-              path="$(rpm -ql "$n" 2>/dev/null | grep -xm1 '^/boot/vmlinuz-' || true)"
+              path="$(rpm -ql "$n" 2>/dev/null \
+                | grep -E '^/boot/vmlinuz-' \
+                | grep -Ev '\.(hmac|debug|gz)(\.|$)' \
+                | head -n1 || true)"
               if [[ -n "${path:-}" ]]; then
-                printf '%s\n' "$path"
+                if [[ "${path}" == /boot/* ]]; then
+                  path="${BOOT_MOUNT}/${path#/boot/}"
+                fi
+                printf '%s\n' "${path}"
                 exit 0
               fi
             done <<< "$(printf '%s\n' "${rpm_out}")"
             ;;
         esac
       done
+
+      if [[ -n "${GV_VMLINUZ_PREFIX}" ]]; then
+        rpm_fb=""
+        rpm_fb=$(rpm -qa 'kernel-core-*' 2>/dev/null | grep -F "${GV_VMLINUZ_PREFIX}" || true)
+        while IFS= read -r n; do
+          [[ -z "${n}" ]] && continue
+          path="$(rpm -ql "$n" 2>/dev/null \
+            | grep -E '^/boot/vmlinuz-' \
+            | grep -Ev '\.(hmac|debug|gz)(\.|$)' \
+            | head -n1 || true)"
+          if [[ -n "${path:-}" ]]; then
+            if [[ "${path}" == /boot/* ]]; then
+              path="${BOOT_MOUNT}/${path#/boot/}"
+            fi
+            printf '%s\n' "${path}"
+            exit 0
+          fi
+        done <<< "$(printf '%s\n' "${rpm_fb}")"
+      fi
+
       shopt -s nullglob
       last=""
-      for p in /boot/vmlinuz-"${GV_BOOT_TAG}"* /boot/vmlinuz-"${GV_VMLINUZ_PREFIX}"*; do
-        [[ -f "${p}" ]] || continue
+      for p in "${BOOT_MOUNT}/vmlinuz-${GV_BOOT_TAG}"* "${BOOT_MOUNT}/vmlinuz-${GV_VMLINUZ_PREFIX}"*; do
+        case "${p}" in *rescue*|*.hmac|*.debug) continue ;; esac
+        [[ -e "${p}" ]] || continue
         last="${p}"
       done
+      if [[ -z "${last}" ]]; then
+        for p in "${BOOT_MOUNT}/vmlinuz-"*; do
+          bn="${p#"${BOOT_MOUNT}"/vmlinuz-}"
+          case "${bn}" in *rescue*|*.hmac|*.debug) continue ;; esac
+          [[ -e "${p}" ]] || continue
+          if [[ "${bn}" == "${GV_BOOT_TAG}"* || "${bn}" == "${GV_VMLINUZ_PREFIX}"* ]]; then
+            last="${p}"
+          fi
+        done
+      fi
+      shopt -u nullglob
+
       if [[ -n "${last}" ]]; then
         printf '%s\n' "${last}"
         exit 0
