@@ -8,3 +8,8 @@
   ansible.builtin.set_fact:
     found_nvidia: true
   when: lspci_output.stdout is search("NVIDIA")
+
+- name: Set found_A30 to true if A30 is found
+  ansible.builtin.set_fact:
+    found_a30: true
+  when: lspci_output.stdout is search("A30")

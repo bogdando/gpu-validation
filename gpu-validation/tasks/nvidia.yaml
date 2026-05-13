@@ -2,13 +2,17 @@
 - name: Run nvidia-smi to list NVIDIA GPUs and count them
   ansible.builtin.shell: set -o pipefail && nvidia-smi --list-gpus | wc -l
   register: nvidia_gpu_count
-  when: found_nvidia | default(false)
+  when:
+    - found_nvidia | default(false)
+    - not found_a30 | default(false)
   changed_when: false
 
 - name: Get some statistics about the NVIDIA GPU
   ansible.builtin.command: nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.free,temperature.gpu --format=csv,nounits,noheader
   register: nvidia_smi_output
-  when: found_nvidia | default(false)
+  when:
+    - found_nvidia | default(false)
+    - not found_a30 | default(false)
   changed_when: false
 
 - name: Display NVIDIA GPU statistics
@@ -20,4 +24,20 @@
       GPU Temperature: {{ nvidia_smi_output.stdout.split(',')[3].strip() }} C
   when:
     - found_nvidia | default(false)
-    - not nvidia_smi_output.failed
+    - (not nvidia_smi_output.failed) or (not nvidia_smi_output is undefined)
+
+- name: Run nvidia smi to get MIG device status
+  ansible.builtin.command: nvidia-smi --query-gpu uuid,pci.device_id,mig.mode.current --format=noheader
+  register: nvidia_smi_mig_mode_output
+  when:
+    - gpu_validation_mode == "mig"
+    - not found_a30 | default(false)
+  changed_when: false
+
+- name: Run lsmod to get A30 MIG NVIDIA modules status
+  ansible.builtin.command: lsmod | grep nvidia
+  register: lsmod_mig_mode_output
+  when:
+    - gpu_validation_mode == "mig"
+    - found_a30 | default(false)
+  changed_when: false

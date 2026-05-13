@@ -1,6 +1,8 @@
 ---
 # [bool] Whether to deploy a VM before running tests
 gpu_validation_enabled: true
+# [string] Mode of running the GPU-enabled device
+gpu_validation_mode: pci_passthrough
 # [string] Name of the VM to create and destroy
 gpu_validation_vm_name: gpu-validation
 # [string] URL of the image to use when creating the VM
@@ -17,6 +19,13 @@ gpu_validation_flavor_vcpus: 4
 gpu_validation_flavor_disk: 80
 # [string] Number of GPUs for the flavor
 gpu_validation_flavor_gpus: 1
+# [list] Extra specs for the flavor:
+gpu_validation_extra_specs:
+  "pci_passthrough:alias": "gpu-l4:{{ gpu_validation_flavor_gpus }}"
+  "hw:pci_numa_affinity_policy": "preferred"
+  "hw:hide_hypervisor_id": "true"
+  "hw:kvm_hidden": "true"
+  "hw:cpu_model": "host-passthrough"
 
 # [string] Keypair to use when creating the VM
 gpu_validation_key_name: gpu-validation

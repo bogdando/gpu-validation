@@ -5,3 +5,20 @@
     fail_msg: No NVIDIA GPUs found in nvidia-smi command!
   when:
     - found_nvidia | default(false)
+    - not found_a30 | default(false)
+
+- name: "TEST[nvidia mig] Check MIG mode slice is Enabled on the VM (not A30)"
+  ansible.builtin.assert:
+    that: "'Enabled' in nvidia_smi_mig_mode_output.stdout"
+    fail_msg: nvidia-smi did not return any MIG enabled device on the VM.
+  when:
+    - gpu_validation_mode == "mig"
+    - not found_a30 | default(false)
+
+- name: "TEST[nvidia mig A30] Check NVIDIA modules are present with MIG VM"
+  ansible.builtin.assert:
+    that: "'nvidia' in lsmod_mig_mode_output.stdout"
+    fail_msg: lsmod did not return any NVIDIA modules on an A30 MIG enabled VM.
+  when:
+    - gpu_validation_mode == "mig"
+    - found_a30 | default(false)
