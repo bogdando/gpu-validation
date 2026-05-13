@@ -128,7 +128,7 @@
     paths: /boot
     patterns:
       - "vmlinuz-{{ (_gv_kpin.boot | trim) }}*"
-      - "vmlinuz-{{ (_gv_kpin.boot | trim | regex_replace('\.(x86_64|aarch64|s390x|ppc64le)$', '')) }}*"
+      - 'vmlinuz-{{ (_gv_kpin.boot | trim | regex_replace("\.(x86_64|aarch64|s390x|ppc64le)$", "")) }}*'
     file_type: file
   register: _gv_kpin_vmlinuz_find
 
@@ -147,7 +147,7 @@
     executable: /bin/bash
     environment:
       # Avoid embedding Jinja in bash ${#...} (ansible treats {# as jinja comment starter)
-      GV_VMLINUZ_PREFIX: "{{ (_gv_kpin.boot | trim | regex_replace('\.(x86_64|aarch64|s390x|ppc64le)$', '')) }}"
+      GV_VMLINUZ_PREFIX: '{{ (_gv_kpin.boot | trim | regex_replace("\.(x86_64|aarch64|s390x|ppc64le)$", "")) }}'
     cmd: |
       set -euo pipefail
       for spec in {% for pin_pkg in _gv_kpin.packages %}{{ pin_pkg | quote }} {% endfor %}; do
