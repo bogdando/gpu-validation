@@ -133,3 +133,52 @@ gpu_validation_reboot_force: false
 gpu_validation_reboot_timeout: 3600
 # [int] Post-reboot delay in seconds
 gpu_validation_reboot_post_delay: 60
+
+# ── NVSwitch validation defaults (nvswitch_validation.yaml playbook) ──────────
+# gpu_validation_nvswitch_validation_fabric_mode is intentionally NOT defaulted here.
+# tasks_from in include_role is rendered in the play context before role defaults
+# are loaded, so a role default cannot serve as a reliable selector.
+# Callers MUST supply gpu_validation_nvswitch_validation_fabric_mode via extra-vars (-e),
+# inventory/group_vars, or an AnsibleTest CR ansibleVarFiles entry.
+# Valid values: 0 (PCI grouping), 1 (Shared NVSwitch), 2 (vGPU mdev).
+
+# [list] Systemd services expected active per mode.
+# Override if your installation uses different service names.
+gpu_validation_nvswitch_validation_mode0_fm_services:
+  - nvidia-fabricmanager
+  - nvlsm
+gpu_validation_nvswitch_validation_mode1_fm_services:
+  - nvidia-fabricmanager
+  - nvlsm
+  - fm-partition-restore
+gpu_validation_nvswitch_validation_mode2_fm_services:
+  - nvidia-fabricmanager
+  - nvlsm
+  - nvidia-vgpu-mgr
+
+# [int] Mode 2 only: expected number of mdev instances (from mdevctl list).
+# Set to 0 to skip the assertion. Typically equals gpu_validation_nvswitch_validation_expected_gpu_count.
+gpu_validation_nvswitch_validation_mode2_expected_mdev_count: 0
+
+# [string] GPU PCI vendor ID
+gpu_validation_nvswitch_validation_gpu_vendor_id: "10de"
+# [string] GPU PCI product ID — HGX B300 GB110 SXM6 AC
+gpu_validation_nvswitch_validation_gpu_product_id: "3182"
+# [int] Total number of GPUs expected on the compute host
+gpu_validation_nvswitch_validation_expected_gpu_count: 8
+# [bool] Check that all GPUs reach the expected Fabric State
+gpu_validation_nvswitch_validation_fabric_state_check: true
+# [string] Expected nvidia-smi Fabric State value
+gpu_validation_nvswitch_validation_fabric_state_expected: "Completed"
+# [int] Expected number of activated NVSwitch partitions; set after first fmpm -l run
+gpu_validation_nvswitch_validation_expected_partition_count: 0
+# [int] Number of GPUs per passthrough VM flavor
+gpu_validation_nvswitch_validation_gpus_per_vm: 1
+# [string] Nova resource class for the GPU passthrough flavor
+gpu_validation_nvswitch_validation_passthrough_resource_class: "CUSTOM_HGX-B300-GPU"
+# [string] Expected libvirt device type for passthrough GPUs in virsh dumpxml
+gpu_validation_nvswitch_validation_expected_device_type: "hostdev"
+# [bool] Check that FABRIC_MODE in fabricmanager.cfg matches gpu_validation_nvswitch_validation_fabric_mode
+gpu_validation_nvswitch_validation_check_fabric_mode_cfg: false
+# [string] Path to the FM configuration file
+gpu_validation_nvswitch_validation_fabric_mode_cfg_file: /usr/share/nvidia/nvswitch/fabricmanager.cfg

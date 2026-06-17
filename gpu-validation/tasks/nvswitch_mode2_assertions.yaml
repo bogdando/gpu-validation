@@ -1,0 +1,40 @@
+---
+# Mode 2 (FABRIC_MODE=2) host-side assertions.
+# Verifies FM + nvidia-vgpu-mgr are active, all GPUs completed, and mdev instances exist.
+
+- name: Assert FM services are active (mode 2)
+  ansible.builtin.assert:
+    that:
+      - item[1] == 'active'
+    fail_msg: "Service {{ item[0] }} is not active (state: {{ item[1] }})"
+    success_msg: "Service {{ item[0] }} is active"
+  loop: "{{ gpu_validation_nvswitch_fm_service_results }}"
+
+- name: Assert all GPUs reached Fabric State Completed
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_fabric_states | length == gpu_validation_nvswitch_validation_expected_gpu_count | int
+      - gpu_validation_nvswitch_fabric_completed_count | int == gpu_validation_nvswitch_validation_expected_gpu_count | int
+    fail_msg: >-
+      Discovered {{ gpu_validation_nvswitch_fabric_states | length }} GPU(s), expected {{ gpu_validation_nvswitch_validation_expected_gpu_count }}.
+      Only {{ gpu_validation_nvswitch_fabric_completed_count }} of
+      {{ gpu_validation_nvswitch_validation_expected_gpu_count }} GPUs reached
+      Fabric State: {{ gpu_validation_nvswitch_validation_fabric_state_expected }}.
+      States seen: {{ gpu_validation_nvswitch_fabric_states }}
+    success_msg: >-
+      All {{ gpu_validation_nvswitch_validation_expected_gpu_count }} GPUs reached
+      Fabric State: {{ gpu_validation_nvswitch_validation_fabric_state_expected }}
+  when: gpu_validation_nvswitch_validation_fabric_state_check | bool
+
+- name: Assert expected number of mdev instances exist
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_mdev_instance_count | int == gpu_validation_nvswitch_validation_mode2_expected_mdev_count | int
+    fail_msg: >-
+      mdevctl list shows {{ gpu_validation_nvswitch_mdev_instance_count }} mdev instance(s),
+      expected {{ gpu_validation_nvswitch_validation_mode2_expected_mdev_count }}.
+      Full mdevctl output:
+      {{ gpu_validation_nvswitch_mdevctl_output }}
+    success_msg: >-
+      All {{ gpu_validation_nvswitch_validation_mode2_expected_mdev_count }} mdev instance(s) found
+  when: gpu_validation_nvswitch_validation_mode2_expected_mdev_count | int > 0

@@ -1,0 +1,43 @@
+---
+# Mode 2 (FABRIC_MODE=2) in-VM isolation assertions.
+# nvidia-vgpu-mgr programs NVSwitch partition routing per mdev — hardware-enforced isolation.
+
+- name: Assert GPU count matches mdev flavor slot size
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_vm_gpu_count | int == gpu_validation_nvswitch_validation_gpus_per_vm | int
+    fail_msg: >-
+      VM {{ inventory_hostname }} has {{ gpu_validation_nvswitch_vm_gpu_count }} GPU(s),
+      expected {{ gpu_validation_nvswitch_validation_gpus_per_vm }} per the mdev flavor.
+      GPUs seen: {{ _vm_gpus.stdout_lines }}
+    success_msg: >-
+      VM {{ inventory_hostname }} has {{ gpu_validation_nvswitch_vm_gpu_count }} GPU(s) as expected
+
+- name: Assert NVLink entries are present within the mdev partition
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_vm_nvlink_lines | length > 0
+    fail_msg: >-
+      No NVLink entries found in nvidia-smi topo -m for VM {{ inventory_hostname }}.
+      GPUs within the same mdev partition should show NVLink connectivity.
+      Topology output:
+      {{ gpu_validation_nvswitch_vm_topo_output }}
+    success_msg: >-
+      NVLink connectivity confirmed within mdev partition for VM {{ inventory_hostname }}
+  when:
+    - gpu_validation_nvswitch_validation_gpus_per_vm | int > 1
+
+- name: Assert topo GPU row count matches mdev slot (no extra GPUs visible from topo matrix)
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_vm_topo_gpu_count | int == gpu_validation_nvswitch_validation_gpus_per_vm | int
+    fail_msg: >-
+      nvidia-smi topo -m shows {{ gpu_validation_nvswitch_vm_topo_gpu_count }} GPU row(s) in
+      VM {{ inventory_hostname }} but mdev flavor specifies
+      {{ gpu_validation_nvswitch_validation_gpus_per_vm }}.
+      A mismatch may indicate cross-partition GPU visibility.
+      Topology output:
+      {{ gpu_validation_nvswitch_vm_topo_output }}
+    success_msg: >-
+      nvidia-smi topo -m GPU row count ({{ gpu_validation_nvswitch_vm_topo_gpu_count }}) matches mdev flavor
+      — no cross-partition GPU leakage detected in VM {{ inventory_hostname }}

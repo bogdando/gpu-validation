@@ -1,0 +1,112 @@
+---
+# NVSwitch validation playbook — dispatches to mode-specific task files.
+#
+# REQUIRED: gpu_validation_nvswitch_validation_fabric_mode must be supplied by the caller.
+# It cannot come from role defaults because tasks_from is rendered in the play
+# context before role defaults are loaded.  Set it via:
+#   - extra-vars:  -e gpu_validation_nvswitch_validation_fabric_mode=0   ← preferred (single source)
+#   - group_vars/all                                       ← also single source
+#   - AnsibleTest CR ansibleVarFiles
+#
+# WARNING: do NOT set it in group_vars/edpm_hosts or group_vars/gpu_vms separately.
+# The two plays resolve the variable independently from their own host context; a
+# per-group assignment silently dispatches each play to a different mode task file.
+#
+# Valid values:
+#   0 — PCI Grouping (FABRIC_MODE=0, open NVSwitch fabric, trusted tenants only)
+#   1 — Shared NVSwitch (FABRIC_MODE=1, fmpm partitions, hardware isolation)
+#   2 — vGPU Multitenancy (FABRIC_MODE=2, mdev, hardware isolation)
+#
+# Host-side checks (runs on edpm_hosts):
+#   Mode 0: FM + NVLSM active, all GPUs Fabric State Completed, open-fabric topo display
+#   Mode 1: FM + NVLSM + fm-partition-restore active, fmpm -l partitions activated
+#   Mode 2: FM + NVLSM + nvidia-vgpu-mgr active, mdevctl list count matches expected
+#
+# In-VM isolation checks (runs on gpu_vms):
+#   Mode 0: GPU count matches PCI group size, NVLink within group (no switch-level isolation)
+#   Mode 1: GPU count matches partition size, NVLink within partition (hardware isolation)
+#   Mode 2: GPU count matches mdev slot size, NVLink within mdev partition (hardware isolation)
+#
+# Inventory groups required:
+#   [edpm_hosts]  — the EDPM compute node(s)
+#   [gpu_vms]     — test VMs booted with the GPU flavor (two minimum)
+#
+# See gpu-validation/defaults/main.yaml for all other gpu_validation_nvswitch_validation_* defaults.
+
+- name: Pre-flight — validate inventory groups
+  hosts: localhost
+  gather_subset:
+    - min
+  tasks:
+    - name: Assert edpm_hosts is non-empty
+      ansible.builtin.assert:
+        that: groups['edpm_hosts'] | default([]) | length >= 1
+        fail_msg: >-
+          Inventory group [edpm_hosts] is empty or undefined.
+          Add at least one EDPM compute node to this group.
+
+    - name: Assert gpu_vms has at least two hosts
+      ansible.builtin.assert:
+        that: groups['gpu_vms'] | default([]) | length >= 2
+        fail_msg: >-
+          Inventory group [gpu_vms] has {{ groups['gpu_vms'] | default([]) | length }} host(s);
+          at least two are required to validate cross-VM NVSwitch isolation.
+
+- name: Host-side checks
+  hosts: edpm_hosts
+  gather_subset:
+    - min
+  pre_tasks:
+    - name: Assert gpu_validation_nvswitch_validation_fabric_mode is provided by caller
+      ansible.builtin.assert:
+        that:
+          - gpu_validation_nvswitch_validation_fabric_mode is defined
+          - (gpu_validation_nvswitch_validation_fabric_mode | string) in ['0', '1', '2']
+        fail_msg: >-
+          gpu_validation_nvswitch_validation_fabric_mode must be set to 0, 1, or 2 via
+          extra-vars (-e gpu_validation_nvswitch_validation_fabric_mode=N), inventory/group_vars,
+          or an AnsibleTest CR ansibleVarFiles entry.
+          It cannot come from role defaults because tasks_from is resolved in the
+          play context before role defaults are loaded.
+  tasks:
+    - name: "Collect host-side data (mode {{ gpu_validation_nvswitch_validation_fabric_mode }})"
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: "nvswitch_mode{{ gpu_validation_nvswitch_validation_fabric_mode }}.yaml"
+
+    - name: "Assert host-side state (mode {{ gpu_validation_nvswitch_validation_fabric_mode }})"
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: "nvswitch_mode{{ gpu_validation_nvswitch_validation_fabric_mode }}_assertions.yaml"
+
+- name: In-VM isolation checks
+  hosts: gpu_vms
+  gather_subset:
+    - min
+  pre_tasks:
+    - name: Assert fabric mode is valid and consistent with edpm_hosts
+      ansible.builtin.assert:
+        that:
+          - gpu_validation_nvswitch_validation_fabric_mode is defined
+          - (gpu_validation_nvswitch_validation_fabric_mode | string) in ['0', '1', '2']
+          - groups['edpm_hosts'] | map('extract', hostvars, 'gpu_validation_nvswitch_validation_fabric_mode')
+            | list | unique | length == 1
+          - (groups['edpm_hosts'] | map('extract', hostvars, 'gpu_validation_nvswitch_validation_fabric_mode')
+            | list | first | string) == (gpu_validation_nvswitch_validation_fabric_mode | string)
+        fail_msg: >-
+          gpu_validation_nvswitch_validation_fabric_mode is not consistent across inventory groups.
+          gpu_vms resolved {{ gpu_validation_nvswitch_validation_fabric_mode }};
+          edpm_hosts resolved
+          {{ groups['edpm_hosts'] | map('extract', hostvars, 'gpu_validation_nvswitch_validation_fabric_mode') | list }}.
+          Set the variable via extra-vars or group_vars/all (not group-specific vars)
+          so both plays dispatch to the same mode task file.
+  tasks:
+    - name: "Collect in-VM data (mode {{ gpu_validation_nvswitch_validation_fabric_mode }})"
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: "nvswitch_mode{{ gpu_validation_nvswitch_validation_fabric_mode }}_isolation.yaml"
+
+    - name: "Assert in-VM isolation (mode {{ gpu_validation_nvswitch_validation_fabric_mode }})"
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: "nvswitch_mode{{ gpu_validation_nvswitch_validation_fabric_mode }}_isolation_assertions.yaml"

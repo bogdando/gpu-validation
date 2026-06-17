@@ -1,0 +1,82 @@
+---
+# Mode 2 (FABRIC_MODE=2) host-side checks.
+# nvidia-vgpu-mgr programs NVSwitch partition routing automatically per mdev instance.
+# mdevctl list verifies one mdev instance per GPU PF BDF.
+
+- name: Collect FM service status (mode 2)
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  loop: "{{ gpu_validation_nvswitch_validation_mode2_fm_services }}"
+  register: _fm_service_status
+  failed_when: false
+
+- name: Set FM service status facts
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_fm_service_results: "{{ _fm_service_status.results
+      | map(attribute='item') | zip(
+         _fm_service_status.results
+         | map(attribute='status') | map(attribute='ActiveState'))
+      | list }}"
+
+- name: Show FM service states
+  ansible.builtin.debug:
+    msg: "{{ item[0] }}: {{ item[1] }}"
+  loop: "{{ gpu_validation_nvswitch_fm_service_results }}"
+
+- name: Collect Fabric State for all GPUs
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail
+    nvidia-smi -q | grep -A2 'Fabric' | grep 'State' | awk '{print $NF}'
+  args:
+    executable: /bin/bash
+  register: _fabric_states
+  changed_when: false
+  failed_when: false
+
+- name: Show fabric states
+  ansible.builtin.debug:
+    msg: "GPU Fabric States: {{ _fabric_states.stdout_lines }}"
+
+- name: Set fabric state facts
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_fabric_states: "{{ _fabric_states.stdout_lines | map('trim') | list }}"
+    gpu_validation_nvswitch_fabric_completed_count: >-
+      {{ _fabric_states.stdout_lines
+         | map('trim')
+         | select('equalto', gpu_validation_nvswitch_validation_fabric_state_expected)
+         | list | length }}
+
+- name: Collect mdev instance list
+  become: true
+  ansible.builtin.command:
+    cmd: mdevctl list
+  register: _mdevctl_list
+  changed_when: false
+  failed_when: false
+
+- name: Show mdev instance list
+  ansible.builtin.debug:
+    msg: "{{ _mdevctl_list.stdout | default('mdevctl list returned no output') }}"
+
+- name: Set mdev instance count fact
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_mdev_instance_count: "{{ _mdevctl_list.stdout_lines | default([]) | length }}"
+    gpu_validation_nvswitch_mdevctl_output: "{{ _mdevctl_list.stdout | default('') }}"
+
+- name: Collect NVLink topology matrix
+  become: true
+  ansible.builtin.command:
+    cmd: nvidia-smi topo -m
+  register: _nvlink_topo
+  changed_when: false
+  failed_when: false
+
+- name: Show NVLink topology matrix
+  ansible.builtin.debug:
+    msg: "{{ _nvlink_topo.stdout | default('nvidia-smi topo not available') }}"
+
+- name: Set topology fact
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_topo_output: "{{ _nvlink_topo.stdout | default('') }}"

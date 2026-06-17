@@ -1,0 +1,84 @@
+---
+# host-side checks: FM services, fabric state, partition activation.
+
+- name: Collect FM service status
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  loop: "{{ gpu_validation_nvswitch_validation_mode1_fm_services }}"
+  register: _fm_service_status
+  failed_when: false
+
+- name: Set FM service status facts
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_fm_service_results: "{{ _fm_service_status.results
+      | map(attribute='item') | zip(
+        _fm_service_status.results
+        | map(attribute='status') | map(attribute='ActiveState'))
+      | list }}"
+
+- name: Show FM service states
+  ansible.builtin.debug:
+    msg: "{{ item[0] }}: {{ item[1] }}"
+  loop: "{{ gpu_validation_nvswitch_fm_service_results }}"
+
+- name: Collect Fabric State for all GPUs
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail
+    nvidia-smi -q | grep -A2 'Fabric' | grep 'State' | awk '{print $NF}'
+  args:
+    executable: /bin/bash
+  register: _fabric_states
+  changed_when: false
+  failed_when: false
+
+- name: Show fabric states
+  ansible.builtin.debug:
+    msg: "GPU Fabric States: {{ _fabric_states.stdout_lines }}"
+
+- name: Set fabric state facts
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_fabric_states: "{{ _fabric_states.stdout_lines | map('trim') | list }}"
+    gpu_validation_nvswitch_fabric_completed_count: >-
+      {{ _fabric_states.stdout_lines
+         | map('trim')
+         | select('equalto', gpu_validation_nvswitch_validation_fabric_state_expected)
+         | list | length }}
+
+- name: Collect fmpm partition list
+  become: true
+  ansible.builtin.command:
+    cmd: fmpm -l
+  register: _fmpm_list
+  changed_when: false
+  failed_when: false
+
+- name: Show fmpm partition list
+  ansible.builtin.debug:
+    msg: "{{ _fmpm_list.stdout | default('fmpm not available or no output') }}"
+
+- name: Set partition facts
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_fmpm_output: "{{ _fmpm_list.stdout | default('') }}"
+    gpu_validation_nvswitch_activated_partition_count: >-
+      {{ (_fmpm_list.stdout | default(''))
+         .splitlines()
+         | select('search', '\\bactivated\\b')
+         | list | length }}
+
+- name: Collect NVLink topology matrix
+  become: true
+  ansible.builtin.command:
+    cmd: nvidia-smi topo -m
+  register: _nvlink_topo
+  changed_when: false
+  failed_when: false
+
+- name: Show NVLink topology matrix
+  ansible.builtin.debug:
+    msg: "{{ _nvlink_topo.stdout | default('nvidia-smi topo not available') }}"
+
+- name: Set topology fact
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_topo_output: "{{ _nvlink_topo.stdout | default('') }}"

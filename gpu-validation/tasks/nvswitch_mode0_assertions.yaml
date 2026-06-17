@@ -1,0 +1,51 @@
+---
+# Mode 0 (FABRIC_MODE=0) host-side assertions.
+# NVSwitch partition check is skipped — fmpm is not used in Mode 0.
+# Isolation is CUDA + IOMMU only; NVSwitch routing is open/all-to-all.
+
+- name: Assert FABRIC_MODE=0 in fabricmanager.cfg
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_fabric_mode_cfg_value | int == gpu_validation_nvswitch_validation_fabric_mode | int
+    fail_msg: >-
+      fabricmanager.cfg has FABRIC_MODE={{ gpu_validation_nvswitch_fabric_mode_cfg_value }}
+      but expected FABRIC_MODE={{ gpu_validation_nvswitch_validation_fabric_mode }}.
+      A leftover mode from a prior deployment will cause incorrect fabric behaviour.
+    success_msg: >-
+      fabricmanager.cfg FABRIC_MODE={{ gpu_validation_nvswitch_fabric_mode_cfg_value }}
+      matches expected mode {{ gpu_validation_nvswitch_validation_fabric_mode }}
+  when:
+    - gpu_validation_nvswitch_validation_check_fabric_mode_cfg | bool
+    - gpu_validation_nvswitch_fabric_mode_cfg_value is defined
+
+- name: Assert FM services are active (mode 0)
+  ansible.builtin.assert:
+    that:
+      - item[1] == 'active'
+    fail_msg: "Service {{ item[0] }} is not active (state: {{ item[1] }})"
+    success_msg: "Service {{ item[0] }} is active"
+  loop: "{{ gpu_validation_nvswitch_fm_service_results }}"
+
+- name: Assert all GPUs reached Fabric State Completed
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_fabric_states | length == gpu_validation_nvswitch_validation_expected_gpu_count | int
+      - gpu_validation_nvswitch_fabric_completed_count | int == gpu_validation_nvswitch_validation_expected_gpu_count | int
+    fail_msg: >-
+      Discovered {{ gpu_validation_nvswitch_fabric_states | length }} GPU(s), expected {{ gpu_validation_nvswitch_validation_expected_gpu_count }}.
+      Only {{ gpu_validation_nvswitch_fabric_completed_count }} of
+      {{ gpu_validation_nvswitch_validation_expected_gpu_count }} GPUs reached
+      Fabric State: {{ gpu_validation_nvswitch_validation_fabric_state_expected }}.
+      States seen: {{ gpu_validation_nvswitch_fabric_states }}
+    success_msg: >-
+      All {{ gpu_validation_nvswitch_validation_expected_gpu_count }} GPUs reached
+      Fabric State: {{ gpu_validation_nvswitch_validation_fabric_state_expected }}
+  when: gpu_validation_nvswitch_validation_fabric_state_check | bool
+
+- name: Note — NVSwitch partition isolation is not enforced in Mode 0
+  ansible.builtin.debug:
+    msg: >-
+      Mode 0 (FABRIC_MODE=0): NVSwitch routing table is open/all-to-all.
+      fmpm partition check is skipped.
+      NVLink isolation between tenant VMs relies on CUDA device ownership and
+      IOMMU DMA boundaries only. This mode is suitable for trusted tenants only.

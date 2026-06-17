@@ -1,0 +1,43 @@
+---
+# In-VM isolation checks: GPU count, NVLink topology per VM.
+# Runs on the [gpu_vms] group (the passthrough-flavor VMs).
+
+- name: Count GPUs visible inside VM
+  ansible.builtin.command:
+    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
+  register: _vm_gpus
+  changed_when: false
+  failed_when: false
+
+- name: Show GPU list inside VM
+  ansible.builtin.debug:
+    msg: "GPUs in VM {{ inventory_hostname }}: {{ _vm_gpus.stdout_lines }}"
+
+- name: Set GPU count fact
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_vm_gpu_count: "{{ _vm_gpus.stdout_lines | length }}"
+
+- name: Collect in-VM NVLink topology matrix
+  ansible.builtin.command:
+    cmd: nvidia-smi topo -m
+  register: _vm_topo
+  changed_when: false
+  failed_when: false
+
+- name: Show in-VM NVLink topology matrix
+  ansible.builtin.debug:
+    msg: "{{ _vm_topo.stdout | default('nvidia-smi topo not available') }}"
+
+- name: Set in-VM topology facts
+  ansible.builtin.set_fact:
+    gpu_validation_nvswitch_vm_topo_output: "{{ _vm_topo.stdout | default('') }}"
+    gpu_validation_nvswitch_vm_nvlink_lines: >-
+      {{ (_vm_topo.stdout | default(''))
+         .splitlines()
+         | select('search', '\\bNV[0-9]')
+         | list }}
+    gpu_validation_nvswitch_vm_topo_gpu_count: >-
+      {{ (_vm_topo.stdout | default(''))
+         .splitlines()
+         | select('match', '^GPU\\d')
+         | list | length | int }}
