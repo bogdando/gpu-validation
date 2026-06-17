@@ -1,0 +1,64 @@
+---
+# Mode 0 (FABRIC_MODE=0) in-VM isolation assertions.
+# Count-only checks: the nvidia-smi GPU count (gpu_validation_nvswitch_vm_gpu_count)
+# and the nvidia-smi topo -m GPU row count must equal
+# gpu_validation_nvswitch_validation_gpus_per_vm.
+# Group membership is NOT verified: the expected PCI group membership (the device
+# list the PCI passthrough alias / CUSTOM_GPU_GROUP_N maps to, defined in Nova
+# configuration) is not available to this validation, so a VM that receives a
+# different set of GPUs of the same size passes these checks.
+# NVLink cross-VM isolation is NOT asserted — NVSwitch routing is open in Mode 0.
+
+- name: Assert VM GPU count matches expected per-VM GPU count
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_vm_gpu_count | int == gpu_validation_nvswitch_validation_gpus_per_vm | int
+    fail_msg: >-
+      VM {{ inventory_hostname }} has {{ gpu_validation_nvswitch_vm_gpu_count }} GPU(s),
+      expected {{ gpu_validation_nvswitch_validation_gpus_per_vm }}.
+      This check verifies the GPU count only — it does not confirm which GPUs
+      (PCI group membership) the VM received.
+      GPUs seen: {{ _vm_gpus.stdout_lines }}
+    success_msg: >-
+      VM {{ inventory_hostname }} has {{ gpu_validation_nvswitch_vm_gpu_count }} GPU(s), matching the
+      expected count (count-only check — group membership not verified)
+
+- name: Assert topo GPU row count matches expected per-VM GPU count
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_vm_topo_gpu_count | int == gpu_validation_nvswitch_validation_gpus_per_vm | int
+    fail_msg: >-
+      nvidia-smi topo -m shows {{ gpu_validation_nvswitch_vm_topo_gpu_count }} GPU row(s) in
+      VM {{ inventory_hostname }} but the expected per-VM GPU count is
+      {{ gpu_validation_nvswitch_validation_gpus_per_vm }}.
+      A mismatch means the VM sees more or fewer GPUs than expected via PCI.
+      This check verifies the topo row count only — it does not confirm which GPUs
+      (PCI group membership) the VM received, and cross-VM NVLink hardware
+      isolation is NOT asserted in Mode 0 (NVSwitch routing is open/all-to-all).
+      Topology output:
+      {{ gpu_validation_nvswitch_vm_topo_output }}
+    success_msg: >-
+      nvidia-smi topo -m GPU row count ({{ gpu_validation_nvswitch_vm_topo_gpu_count }}) matches the
+      expected per-VM GPU count (count-only check — group membership not verified)
+      in VM {{ inventory_hostname }}
+
+- name: Assert NVLink entries are present among the VM's GPUs
+  ansible.builtin.assert:
+    that:
+      - gpu_validation_nvswitch_vm_nvlink_lines | length > 0
+    fail_msg: >-
+      No NVLink entries found in nvidia-smi topo -m for VM {{ inventory_hostname }}.
+      The GPUs visible in the VM should show NVLink connectivity.
+      Topology output:
+      {{ gpu_validation_nvswitch_vm_topo_output }}
+    success_msg: >-
+      NVLink connectivity confirmed among the VM's GPUs for VM {{ inventory_hostname }}
+  when:
+    - gpu_validation_nvswitch_validation_gpus_per_vm | int > 1
+
+- name: Note — cross-VM NVLink isolation is software-only in Mode 0
+  ansible.builtin.debug:
+    msg: >-
+      Mode 0 (FABRIC_MODE=0): NVSwitch routing table is open/all-to-all.
+      Cross-VM NVLink hardware isolation is NOT enforced. This mode is
+      suitable for trusted tenants only. For hardware isolation use Mode 1 or Mode 2.
