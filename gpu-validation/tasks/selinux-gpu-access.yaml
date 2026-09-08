@@ -1,0 +1,15 @@
+---
+
+- name: Gather SELinux facts
+  ansible.builtin.setup:
+    gather_subset:
+      - "!all"
+      - selinux
+
+- name: Allow containers to access GPU device nodes under SELinux
+  become: true
+  ansible.posix.seboolean:
+    name: container_use_devices
+    state: true
+    persistent: true
+  when: ansible_selinux.status | default('disabled') == 'enabled'

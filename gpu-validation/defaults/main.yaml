@@ -112,7 +112,8 @@ gpu_validation_workload_cache_mount_path: "/root/.cache/huggingface"  # "/opt/ap
 # [string] Container Device options
 gpu_validation_workload_device_opts: "--device nvidia.com/gpu=all"
 # [string] Container security options
-gpu_validation_workload_security_opts: "--security-opt=label=disable"
+# Empty keeps the container SELinux-confined
+gpu_validation_workload_security_opts: ""
 # [string] Container options
 gpu_validation_workload_additional_opts: "--rm -it"
 # [string] Container user namespace option
