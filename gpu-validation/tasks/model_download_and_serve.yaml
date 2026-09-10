@@ -16,7 +16,7 @@
   ansible.builtin.file:
     path: "{{ gpu_validation_workload_cache_dir }}"
     state: directory
-    mode: "0755"
+    mode: "0750"
     owner: cloud-user
     group: cloud-user
 
@@ -24,9 +24,20 @@
   ansible.builtin.file:
     path: /home/cloud-user/.config/systemd/user
     state: directory
-    mode: "0755"
+    mode: "0750"
     owner: cloud-user
     group: cloud-user
+
+- name: Create huggingface token environment file
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    dest: /home/cloud-user/huggingface-token.env
+    content: "HF_TOKEN={{ gpu_validation_model_download_hf_token }}"
+    mode: "0600"
+    owner: cloud-user
+    group: cloud-user
+  register: huggingface_token_file
 
 - name: Create vllm model serving systemd service
   ansible.builtin.template:
@@ -34,11 +45,11 @@
     dest: /home/cloud-user/.config/systemd/user/vllm-serve.service
     owner: cloud-user
     group: cloud-user
-    mode: "0755"
+    mode: "0750"
   register: serviceconfig
 
 - name: Stop the model serving service
-  when: serviceconfig.changed  # noqa: no-handler - readability
+  when: serviceconfig.changed or huggingface_token_file.changed # noqa: no-handler - readability
   ansible.builtin.systemd_service:
     scope: user
     name: vllm-serve
