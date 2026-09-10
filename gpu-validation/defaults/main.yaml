@@ -160,10 +160,6 @@ gpu_validation_nvswitch_validation_mode2_fm_services:
 # Set to 0 to skip the assertion. Typically equals gpu_validation_nvswitch_validation_expected_gpu_count.
 gpu_validation_nvswitch_validation_mode2_expected_mdev_count: 0
 
-# [string] GPU PCI vendor ID
-gpu_validation_nvswitch_validation_gpu_vendor_id: "10de"
-# [string] GPU PCI product ID — HGX B300 GB110 SXM6 AC
-gpu_validation_nvswitch_validation_gpu_product_id: "3182"
 # [int] Total number of GPUs expected on the compute host
 gpu_validation_nvswitch_validation_expected_gpu_count: 8
 # [bool] Check that all GPUs reach the expected Fabric State
@@ -174,10 +170,6 @@ gpu_validation_nvswitch_validation_fabric_state_expected: "Completed"
 gpu_validation_nvswitch_validation_expected_partition_count: 0
 # [int] Number of GPUs per passthrough VM flavor
 gpu_validation_nvswitch_validation_gpus_per_vm: 1
-# [string] Nova resource class for the GPU passthrough flavor
-gpu_validation_nvswitch_validation_passthrough_resource_class: "CUSTOM_HGX-B300-GPU"
-# [string] Expected libvirt device type for passthrough GPUs in virsh dumpxml
-gpu_validation_nvswitch_validation_expected_device_type: "hostdev"
 # [bool] Check that FABRIC_MODE in fabricmanager.cfg matches gpu_validation_nvswitch_validation_fabric_mode
 gpu_validation_nvswitch_validation_check_fabric_mode_cfg: false
 # [string] Path to the FM configuration file
