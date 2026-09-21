@@ -131,7 +131,8 @@ gpu_validation_workload_additional_env: "--env=HF_HUB_OFFLINE=0 --env=VLLM_NO_US
 gpu_validation_vllm_api_url: "http://127.0.0.1:8000"
 # [float] GPU memory utilization for vLLM (0.0-1.0, leave empty to use vLLM default)
 gpu_validation_vllm_mem_utilization:
-
+# [string] Additional arguments for vLLM
+gpu_validation_vllm_extra_args:
 # [bool] Force reboot regardless of needs-restarting check
 gpu_validation_reboot_force: false
 # [int] Reboot timeout in seconds

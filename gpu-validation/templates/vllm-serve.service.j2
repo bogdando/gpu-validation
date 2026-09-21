@@ -32,4 +32,5 @@ ExecStart=podman run \
 {% if gpu_validation_vllm_mem_utilization %}
     --gpu-memory-utilization {{ gpu_validation_vllm_mem_utilization }} \
 {% endif %}
+    {{ gpu_validation_vllm_extra_args }} \
     --tensor-parallel-size {{ gpu_validation_num_gpus }}
