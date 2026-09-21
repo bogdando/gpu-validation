@@ -25,17 +25,25 @@
     visibility: public
     ca_cert: "{{ gpu_validation_ca_cert_path }}"
   when: not _gpu_validation_image_exists | bool
+  register: _gpu_validation_glance_image
 
-- name: Reset extra_specs for vGPU scheduling
+- name: Reset extra_specs for vGPU scheduling safe defaults
   ansible.builtin.set_fact:
-    gpu_validation_extra_specs:
+    gpu_validation_extra_specs_default:
       "resources:VGPU": "1"
   when: gpu_validation_mode in ["mig", "vgpu"]
 
 - name: Add hugepage support to extra_specs
+  vars:
+    _gpu_validation_extra_specs: "{{ gpu_validation_extra_specs_default }}"
   ansible.builtin.set_fact:
-    gpu_validation_extra_specs: "{{ gpu_validation_extra_specs | combine({'hw:mem_page_size': gpu_validation_mem_page_size}) }}"
-  when: gpu_validation_mem_page_size | length > 0
+    gpu_validation_extra_specs_default: "{{ _gpu_validation_extra_specs | combine({'hw:mem_page_size': gpu_validation_mem_page_size | string}, recursive=true) }}"
+  when: gpu_validation_mem_page_size | string | length > 0
+
+- name: Merge with user-specified extra_specs
+  vars:
+  ansible.builtin.set_fact:
+    _gpu_validation_extra_specs_merged: "{{ gpu_validation_extra_specs_default | combine(gpu_validation_extra_specs, recursive=true) }}"
 
 - name: Create flavor for GPU validation
   openstack.cloud.compute_flavor:
@@ -43,5 +51,6 @@
     ram: "{{ gpu_validation_flavor_ram }}"
     vcpus: "{{ gpu_validation_flavor_vcpus }}"
     disk: "{{ gpu_validation_flavor_disk }}"
-    extra_specs: "{{ gpu_validation_extra_specs }}"
+    extra_specs: "{{ _gpu_validation_extra_specs_merged }}"
     ca_cert: "{{ gpu_validation_ca_cert_path }}"
+  register: _gpu_validation_flavor
