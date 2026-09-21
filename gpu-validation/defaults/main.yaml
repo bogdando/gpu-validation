@@ -30,8 +30,13 @@ gpu_validation_pci_alias: gpu-l4
 # [string] Time to wait for VM to become created, seconds
 gpu_validation_server_timeout: 180
 
-# [list] Extra specs for the flavor:
-gpu_validation_extra_specs:
+# [list] Extra specs for the flavor specified by the user:
+gpu_validation_extra_specs: {}
+# [list] Extra default specs for the flavor:
+# automatically evaluated based on gpu_validation_mem_page_size and gpu_validation_mode:
+# gpu_validation_mode in ["mig", "vgpu"] - overriden and merged with gpu_validation_extra_specs
+# gpu_validation_mode == "pci_passthrough" - merged with gpu_validation_extra_specs
+gpu_validation_extra_specs_default:
   "pci_passthrough:alias": "{{ gpu_validation_pci_alias }}:{{ gpu_validation_flavor_gpus }}"
   "hw:pci_numa_affinity_policy": "preferred"
   "hw:hide_hypervisor_id": "true"
