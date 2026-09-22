@@ -1,0 +1,11 @@
+---
+- name: Create host aggregate for group_policy scheduling
+  when: "'group_policy' in gpu_validation_extra_specs"
+  openstack.cloud.host_aggregate:
+    state: present
+    name: "{{ gpu_validation_aggregate_name }}"
+    metadata:
+      group_policy: "{{ gpu_validation_extra_specs['group_policy'] }}"
+    hosts: "{{ gpu_validation_aggregate_hosts }}"
+    purge_hosts: false
+    ca_cert: "{{ gpu_validation_ca_cert_path }}"
