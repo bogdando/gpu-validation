@@ -32,6 +32,10 @@ gpu_validation_server_timeout: 180
 
 # [list] Extra specs for the flavor specified by the user:
 gpu_validation_extra_specs: {}
+# [list] Nova compute hostnames to add to the GPU validation aggregate
+gpu_validation_aggregate_hosts: []
+# [string] Host aggregate name when group_policy extra spec is set
+gpu_validation_aggregate_name: "{{ gpu_validation_flavor_name }}"
 # [list] Extra default specs for the flavor:
 # automatically evaluated based on gpu_validation_mem_page_size and gpu_validation_mode:
 # gpu_validation_mode in ["mig", "vgpu"] - overriden and merged with gpu_validation_extra_specs

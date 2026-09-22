@@ -9,6 +9,9 @@
     - name: VM image import
       ansible.builtin.import_tasks: vm_image.yaml
 
+    - name: Create host aggregate for group_policy
+      ansible.builtin.import_tasks: vm_aggregate.yaml
+
     - name: Set up SSH key for VM
       ansible.builtin.import_tasks: vm_sshkey.yaml
 
