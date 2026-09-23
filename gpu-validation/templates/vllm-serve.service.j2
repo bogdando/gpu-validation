@@ -18,7 +18,7 @@ ExecStart=podman run \
     {{ gpu_validation_workload_additional_opts }} \
     -v {{ gpu_validation_workload_cache_dir }}:{{ gpu_validation_workload_cache_mount_path }}:Z \
 {% if gpu_validation_model_download_hf_token %}
-    --env "HUGGING_FACE_HUB_TOKEN={{ gpu_validation_model_download_hf_token | quote }}" \
+    --env-file %h/huggingface-token.env  \
 {% endif %}
 {% if gpu_validation_http_proxy or gpu_validation_https_proxy %}
     --env "HTTP_PROXY={{ gpu_validation_http_proxy | default(gpu_validation_https_proxy, true) }}" \

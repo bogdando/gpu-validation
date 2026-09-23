@@ -28,12 +28,17 @@
         gpgcheck: 1
         gpgkey: "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ ansible_facts['distribution_major_version'] }}"
 
-    - name: Install DKMS (UNSUPPORTED)
+    - name: Get running kernel version
+      ansible.builtin.command: uname -r
+      register: running_kernel
+      changed_when: false
+
+    - name: Install DKMS and kernel-devel for running kernel (UNSUPPORTED)
       ansible.builtin.dnf:
         name:
           - dkms
-          - kernel-devel
-          - kernel-headers
+          - "kernel-devel-{{ running_kernel.stdout }}"
+          - "kernel-headers-{{ running_kernel.stdout }}"
         state: present
 
 - name: Install pciutils package
