@@ -131,6 +131,10 @@ gpu_validation_workload_userns:  # "--userns=keep-id:uid=1001" for RHAIIS
 gpu_validation_workload_shm_size: "--shm-size=4g"
 # [string] Additional environment variables
 gpu_validation_workload_additional_env: "--env=HF_HUB_OFFLINE=0 --env=VLLM_NO_USAGE_STATS=1"
+# [string] Extra [Service] directives appended to vllm-serve.service (e.g. Restart=)
+gpu_validation_workload_service_extra_config: ''
+# [string] ExecStartPre lines injected before ExecStart in vllm-serve.service
+gpu_validation_workload_pre_start_command: ''
 # [string] vLLM API URL
 gpu_validation_vllm_api_url: "http://127.0.0.1:8000"
 # [float] GPU memory utilization for vLLM (0.0-1.0, leave empty to use vLLM default)

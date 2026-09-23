@@ -1,14 +1,21 @@
 [Unit]
 Description=vllm model serve service
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target default.target
 
 [Service]
+{% if gpu_validation_workload_service_extra_config | default('', true) | length > 0 %}
+{{ gpu_validation_workload_service_extra_config }}
+{% endif %}
 {% if gpu_validation_http_proxy or gpu_validation_https_proxy %}
 Environment="HTTP_PROXY={{ gpu_validation_http_proxy | default(gpu_validation_https_proxy, true) }}"
 Environment="HTTPS_PROXY={{ gpu_validation_https_proxy | default(gpu_validation_http_proxy, true) }}"
 Environment="NO_PROXY={{ gpu_validation_no_proxy | default('localhost,127.0.0.1') }}"
+{% endif %}
+{% if gpu_validation_workload_pre_start_command | length > 0 %}
+{{ gpu_validation_workload_pre_start_command }}
 {% endif %}
 ExecStart=podman run \
     {{ gpu_validation_workload_device_opts }} \
