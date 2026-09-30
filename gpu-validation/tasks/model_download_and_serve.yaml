@@ -8,7 +8,7 @@
     cmd: >
       podman login --username {{ gpu_validation_workload_registry_username | quote }} --password
       {{ gpu_validation_workload_registry_password | quote }} {{ _gpu_validation_workload_registry_host | quote }}
-  no_log: true
+  no_log: false
   when: gpu_validation_workload_registry_username | default('', true) | length > 0
   changed_when: false
 
