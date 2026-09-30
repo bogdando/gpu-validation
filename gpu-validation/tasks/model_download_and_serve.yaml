@@ -1,7 +1,7 @@
 ---
 - name: Extract the repository host name
   ansible.builtin.set_fact:
-    _gpu_validation_workload_registry_host: "{{ gpu_validation_workload_container_image | regex_replace('docker://(.*?)/.*', '\\1') }}"
+    _gpu_validation_workload_registry_host: "{{ gpu_validation_workload_container_image | regex_replace('(docker://)?(.*?)/.*', '\\2') }}"
 
 - name: Log into registry if username is specified
   ansible.builtin.command:
