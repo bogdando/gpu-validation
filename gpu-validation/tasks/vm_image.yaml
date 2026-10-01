@@ -24,6 +24,7 @@
     filename: "/tmp/{{ gpu_validation_image_url | basename }}"
     visibility: public
     ca_cert: "{{ gpu_validation_ca_cert_path }}"
+    properties: "{{ gpu_validation_image_properties | default(omit, true) }}"
   when: not _gpu_validation_image_exists | bool
 
 - name: Reset extra_specs for vGPU scheduling safe defaults

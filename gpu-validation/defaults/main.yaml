@@ -51,6 +51,9 @@ gpu_validation_extra_specs_default:
 # When set, adds hw:mem_page_size to the flavor extra_specs
 gpu_validation_mem_page_size: ''
 
+# [dict] Image properties for the flavor
+gpu_validation_image_properties: {}
+
 # [string] NVIDIA management library version
 gpu_validation_libnvidia_ml_version: libnvidia-ml
 
