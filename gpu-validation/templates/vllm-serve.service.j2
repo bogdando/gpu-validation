@@ -17,6 +17,9 @@ Environment="NO_PROXY={{ gpu_validation_no_proxy | default('localhost,127.0.0.1'
 {% if gpu_validation_workload_pre_start_command | length > 0 %}
 {{ gpu_validation_workload_pre_start_command }}
 {% endif %}
+{% if gpu_validation_custom_run_command | length > 0 %}
+{{ gpu_validation_custom_run_command }}
+{% else %}
 ExecStart=podman run \
     {{ gpu_validation_workload_device_opts }} \
     {{ gpu_validation_workload_security_opts }} \
@@ -41,3 +44,4 @@ ExecStart=podman run \
 {% endif %}
     {{ gpu_validation_vllm_extra_args }} \
     --tensor-parallel-size {{ gpu_validation_num_gpus }}
+{% endif %}

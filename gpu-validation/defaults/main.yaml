@@ -68,6 +68,9 @@ gpu_validation_floating_ip: 192.168.122.222
 # [string] WARNING Where to (over-)write the ssh key. Must match path in inventory
 gpu_validation_private_key_file: ~/test_keypair.key
 
+# [string] Custom run command for the LLM serving container
+gpu_validation_custom_run_command: ''
+
 # [string] SSH ProxyCommand for accessing VMs through a bastion/hypervisor
 # Example: '-o ProxyCommand="ssh -W %h:%p -o StrictHostKeyChecking=no -i /path/to/key user@bastion-host"'
 gpu_validation_ssh_proxy_command: ''
