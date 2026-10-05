@@ -18,7 +18,6 @@
 
 - name: Install NVIDIA container toolkit and configure runtime
   ansible.builtin.import_tasks: nvidia-container-toolkit.yaml
-  when: gpu_validation_nvidia_container_toolkit_install | bool
 
 - name: Check GPUs
   ansible.builtin.import_tasks: gpus.yaml
@@ -40,7 +39,6 @@
 
 - name: Generate NVIDIA CDI configuration
   ansible.builtin.import_tasks: nvidia-cdi.yaml
-  when: gpu_validation_nvidia_container_toolkit_install | bool
 
 - name: Allow container GPU device access under SELinux
   ansible.builtin.import_tasks: selinux-gpu-access.yaml

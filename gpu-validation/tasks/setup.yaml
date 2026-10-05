@@ -60,4 +60,4 @@
   ansible.builtin.copy:
     src: "{{ role_path }}/files/scripts"
     dest: /tmp
-    mode: "1777"
+    mode: "0755"
