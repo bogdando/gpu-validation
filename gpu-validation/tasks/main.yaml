@@ -3,6 +3,9 @@
   become: true
   ansible.builtin.import_tasks: setup.yaml
 
+- name: Reboot if system updates require it
+  ansible.builtin.import_tasks: reboot_if_needed.yaml
+
 - name: Nvidia Setup (Use the edpm_accel_drivers role to install the NVIDIA driver in our VM)
   ansible.builtin.include_role:
     name: osp.edpm.edpm_accel_drivers

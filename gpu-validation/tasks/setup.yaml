@@ -10,15 +10,15 @@
   ansible.builtin.include_tasks: proxy.yaml
   when: (gpu_validation_http_proxy | length > 0) or (gpu_validation_https_proxy | length > 0)
 
+- name: Execute bootstrap command
+  ansible.builtin.include_role:
+    name: osp.edpm.edpm_bootstrap
+    tasks_from: bootstrap_command.yml
+
 - name: Install needed driver dependency packages
   when:
     - gpu_validation_mode in ["mig", "vgpu"]
   block:
-    - name: Execute bootstrap command
-      ansible.builtin.include_role:
-        name: osp.edpm.edpm_bootstrap
-        tasks_from: bootstrap_command.yml
-
     - name: Add EPEL repository for DKMS (UNSUPPORTED)
       ansible.builtin.yum_repository:
         name: epel
