@@ -80,6 +80,8 @@ gpu_validation_dns_server: 192.168.122.1
 # [dict] The PCI Device ID and the number of devices expected
 gpu_validation_pci_devices:
   10de:27b8: 1
+# [string] Vendor name for the GPU to be selected for the validation
+gpu_validation_vendor_name: nvidia
 
 # [bool] Install nvidia-container-toolkit and generate CDI specs for container GPU access.
 # Required when the guest VM does not have the toolkit pre-installed.
