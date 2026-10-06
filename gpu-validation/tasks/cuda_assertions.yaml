@@ -1,6 +1,11 @@
 ---
-- name: TEST[CUDA] Run the CUDA Sanity Check
-  ansible.builtin.command: python /tmp/scripts/cuda_sanity_check.py
-  register: cuda_sanity_result
-  failed_when: cuda_sanity_result.rc != 0
-  changed_when: false
+- name: TEST[CUDA] Assertions for CUDA
+  when:
+    - gpu_validation_found[gpu_validation_vendor_name] | bool
+    - gpu_validation_vendor_name | upper == "NVIDIA"
+  block:
+    - name: TEST[CUDA] Run the CUDA Sanity Check
+      ansible.builtin.command: python /tmp/scripts/cuda_sanity_check.py
+      register: cuda_sanity_result
+      failed_when: cuda_sanity_result.rc != 0
+      changed_when: false

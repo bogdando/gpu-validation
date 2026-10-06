@@ -4,7 +4,16 @@
   register: lspci_output
   changed_when: false
 
-- name: Set found_nvidia to true if NVIDIA is found
+- name: Init presense facts for {{ gpu_validation_vendor_name }}
   ansible.builtin.set_fact:
-    found_nvidia: true
-  when: lspci_output.stdout is search("NVIDIA")
+    gpu_validation_found: "{{ gpu_validation_found | default({}) | combine({ gpu_validation_vendor_name: false }) }}"
+
+- name: Set presence facts for {{ gpu_validation_vendor_name }}
+  ansible.builtin.set_fact:
+    gpu_validation_found: "{{ gpu_validation_found | default({}) | combine({ gpu_validation_vendor_name: true }) }}"
+  when: lspci_output.stdout is search(gpu_validation_vendor_name, ignorecase=true)
+
+- name: Assrt that found PCI devices for vendor name {{ gpu_validation_vendor_name }}
+  ansible.builtin.assert:
+    that: gpu_validation_found[gpu_validation_vendor_name] | bool
+    fail_msg: "No {{ gpu_validation_vendor_name }} GPUs found"

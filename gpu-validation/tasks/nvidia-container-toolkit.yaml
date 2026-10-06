@@ -1,22 +1,27 @@
 ---
-- name: Add NVIDIA container toolkit repository
-  when: gpu_validation_nvidia_container_toolkit_repo_url | default('') | length > 0
-  become: true
-  ansible.builtin.get_url:
-    url: "{{ gpu_validation_nvidia_container_toolkit_repo_url }}"
-    dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
-    mode: "0644"
+- name: NVIDIA container toolkit
+  when:
+    - gpu_validation_found[gpu_validation_vendor_name] | bool
+    - gpu_validation_vendor_name | upper == "NVIDIA"
+  block:
+    - name: Add NVIDIA container toolkit repository
+      when: gpu_validation_nvidia_container_toolkit_repo_url | default('') | length > 0
+      become: true
+      ansible.builtin.get_url:
+        url: "{{ gpu_validation_nvidia_container_toolkit_repo_url }}"
+        dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+        mode: "0644"
 
-- name: Install nvidia-container-toolkit
-  become: true
-  ansible.builtin.dnf:
-    name: nvidia-container-toolkit
-    state: present
+    - name: Install nvidia-container-toolkit
+      become: true
+      ansible.builtin.dnf:
+        name: nvidia-container-toolkit
+        state: present
 
-- name: Reboot if needed after toolkit install
-  ansible.builtin.import_tasks: reboot_if_needed.yaml
+    - name: Reboot if needed after toolkit install
+      ansible.builtin.import_tasks: reboot_if_needed.yaml
 
-- name: Configure NVIDIA container runtime for CDI
-  become: true
-  ansible.builtin.command: nvidia-ctk runtime configure --runtime=containerd
-  changed_when: true
+    - name: Configure NVIDIA container runtime for CDI
+      become: true
+      ansible.builtin.command: nvidia-ctk runtime configure --runtime=containerd
+      changed_when: true

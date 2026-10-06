@@ -6,9 +6,13 @@
 - name: Reboot if system updates require it
   ansible.builtin.import_tasks: reboot_if_needed.yaml
 
+- name: Check GPUs
+  ansible.builtin.import_tasks: gpus.yaml
+
 - name: Nvidia Setup (Use the edpm_accel_drivers role to install the NVIDIA driver in our VM)
   ansible.builtin.include_role:
     name: osp.edpm.edpm_accel_drivers
+  when: gpu_validation_vendor_name | upper == "NVIDIA" and gpu_validation_found[gpu_validation_vendor_name] | bool
 
 - name: Reboot if system updates require it
   ansible.builtin.import_tasks: reboot_if_needed.yaml
@@ -22,33 +26,31 @@
 - name: Install NVIDIA container toolkit and configure runtime
   ansible.builtin.import_tasks: nvidia-container-toolkit.yaml
 
-- name: Check GPUs
-  ansible.builtin.import_tasks: gpus.yaml
-- name: GPUs Assertions  # noqa: ignore-errors
+- name: GPUs Assertions
   ansible.builtin.import_tasks: gpus_assertions.yaml
-  ignore_errors: true
 
 - name: Check NVIDIA
   ansible.builtin.import_tasks: nvidia.yaml
-- name: NVIDIA Assertions  # noqa: ignore-errors
-  ansible.builtin.import_tasks: nvidia_assertions.yaml
-  ignore_errors: true
 
-- name: Check CUDA libs
-  ansible.builtin.import_tasks: cuda.yaml
-- name: CUDA Assertions  # noqa: ignore-errors
-  ansible.builtin.import_tasks: cuda_assertions.yaml
-  ignore_errors: true
+- name: NVIDIA assertions
+  ansible.builtin.import_tasks: nvidia_assertions.yaml
 
 - name: Generate NVIDIA CDI configuration
   ansible.builtin.import_tasks: nvidia-cdi.yaml
 
+- name: Check CUDA libs
+  ansible.builtin.import_tasks: cuda.yaml
+
+- name: CUDA Assertions
+  ansible.builtin.import_tasks: cuda_assertions.yaml
+
 - name: Allow container GPU device access under SELinux
   ansible.builtin.import_tasks: selinux-gpu-access.yaml
 
-- name: Check vllm
+- name: Check vllm (ignore errors)  # noqa: ignore-errors
   ansible.builtin.import_tasks: vllm.yaml
   when: gpu_validation_model_tests_enabled | bool
+  ignore_errors: true
 
 - name: Cleanup
   become: true

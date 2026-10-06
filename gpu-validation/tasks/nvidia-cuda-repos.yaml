@@ -1,19 +1,24 @@
 ---
-- name: Add NVIDIA CUDA repo
-  become: true
-  ansible.builtin.yum_repository:
-    name: nvidia-cuda
-    description: nvidia cuda repo
-    baseurl: "{{ edpm_accel_drivers_nvidia_repo_url }}/$basearch/"
-    gpgcheck: true
-    gpgkey: "{{ edpm_accel_drivers_nvidia_repo_gpgkey }}"
+- name: NVIDIA CUDA repo
+  when:
+    - gpu_validation_found[gpu_validation_vendor_name] | bool
+    - gpu_validation_vendor_name | upper == "NVIDIA"
+  block:
+    - name: Add NVIDIA CUDA repo
+      become: true
+      ansible.builtin.yum_repository:
+        name: nvidia-cuda
+        description: nvidia cuda repo
+        baseurl: "{{ edpm_accel_drivers_nvidia_repo_url }}/$basearch/"
+        gpgcheck: true
+        gpgkey: "{{ edpm_accel_drivers_nvidia_repo_gpgkey }}"
 
-- name: Install NVIDIA Management Library
-  become: true
-  ansible.builtin.dnf:
-    name: "{{ gpu_validation_libnvidia_ml_version }}"
-    state: present
+    - name: Install NVIDIA Management Library
+      become: true
+      ansible.builtin.dnf:
+        name: "{{ gpu_validation_libnvidia_ml_version }}"
+        state: present
 
-- name: Refresh package facts after driver installation
-  ansible.builtin.package_facts:
-    manager: rpm
+    - name: Refresh package facts after driver installation
+      ansible.builtin.package_facts:
+        manager: rpm

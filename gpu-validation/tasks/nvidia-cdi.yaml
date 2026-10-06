@@ -1,15 +1,20 @@
 ---
-- name: Ensure CDI directory exists
-  become: true
-  ansible.builtin.file:
-    path: /etc/cdi
-    state: directory
-    mode: "0755"
-    owner: root
+- name: NVIDIA CDI configuration
+  when:
+    - gpu_validation_found[gpu_validation_vendor_name] | bool
+    - gpu_validation_vendor_name | upper == "NVIDIA"
+  block:
+    - name: Ensure CDI directory exists
+      become: true
+      ansible.builtin.file:
+        path: /etc/cdi
+        state: directory
+        mode: "0755"
+        owner: root
 
-# Generate CDI after the driver/CUDA installation flow has completed.
-# If it is generated too early, libcuda.so.1 can be missing from the spec.
-- name: Generate NVIDIA CDI configuration
-  become: true
-  ansible.builtin.command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
-  changed_when: true
+    # Generate CDI after the driver/CUDA installation flow has completed.
+    # If it is generated too early, libcuda.so.1 can be missing from the spec.
+    - name: Generate NVIDIA CDI configuration
+      become: true
+      ansible.builtin.command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+      changed_when: true
