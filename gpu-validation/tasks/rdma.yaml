@@ -1,0 +1,31 @@
+---
+# RDMA stack installation and nvidia-peermem setup
+# Expects: gpu_validation_rdma_packages, gpu_validation_nvidia_peermem_enabled
+
+- name: Install RDMA packages
+  become: true
+  ansible.builtin.dnf:
+    name: "{{ gpu_validation_rdma_packages }}"
+    state: present
+
+- name: Enable and start rdma service
+  become: true
+  ansible.builtin.systemd:
+    name: rdma
+    enabled: true
+    state: started
+
+- name: Load nvidia-peermem kernel module
+  become: true
+  community.general.modprobe:
+    name: nvidia_peermem
+    state: present
+  when: gpu_validation_nvidia_peermem_enabled | bool
+
+- name: Persist nvidia-peermem across reboots
+  become: true
+  ansible.builtin.copy:
+    content: "nvidia_peermem\n"
+    dest: /etc/modules-load.d/nvidia-peermem.conf
+    mode: "0644"
+  when: gpu_validation_nvidia_peermem_enabled | bool

@@ -1,0 +1,122 @@
+---
+# Inter-VM NCCL multi-node benchmark using NCCL's built-in socket bootstrap
+# and RDMA transport. Runs from target_nodes[0], connecting to all target_nodes.
+#
+# NOTE(bogdando): This uses NCCL's native multi-process launch (one process
+# per node) without requiring a full MPI installation. Each process manages
+# gpu_validation_nccl_gpus_per_node GPUs. We use a simple shell loop to
+# launch all_reduce_perf on remote nodes via SSH, then the local process
+# with NCCL_COMM_ID set to the coordinator address.
+
+- name: Build host list for NCCL
+  ansible.builtin.set_fact:
+    nccl_inter_vm_hosts: >-
+      {{ groups['target_nodes']
+         | map('extract', hostvars, 'ansible_host')
+         | list }}
+
+- name: Show inter-VM host list
+  ansible.builtin.debug:
+    msg: "NCCL inter-VM hosts: {{ nccl_inter_vm_hosts }}"
+
+- name: Compose NCCL environment for inter-VM run
+  ansible.builtin.set_fact:
+    nccl_inter_env: >-
+      {{
+        gpu_validation_nccl_env | default({})
+        | combine({
+            'CUDA_VISIBLE_DEVICES': range(0, gpu_validation_nccl_gpus_per_node | int) | join(','),
+            'LD_LIBRARY_PATH': gpu_validation_nccl_cuda_home ~ '/lib64:' ~ gpu_validation_nccl_home
+          })
+      }}
+
+- name: Template inter-VM NCCL launcher script
+  become: true
+  ansible.builtin.copy:
+    dest: /opt/nccl-inter-vm-run.sh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      HOSTS=({{ nccl_inter_vm_hosts | join(' ') }})
+      NPROC=${#HOSTS[@]}
+      NGPUS={{ gpu_validation_nccl_gpus_per_node }}
+      COORD="${HOSTS[0]}:12345"
+      NCCL_BIN={{ gpu_validation_nccl_tests_dir }}/build/all_reduce_perf
+
+      {% for key, val in nccl_inter_env.items() %}
+      export {{ key }}="{{ val }}"
+      {% endfor %}
+      export NCCL_COMM_ID="${COORD}"
+
+      # Launch remote ranks in background via SSH
+      PIDS=()
+      for (( i=1; i<NPROC; i++ )); do
+        ssh -o StrictHostKeyChecking=no "${HOSTS[$i]}" \
+          "{% for key, val in nccl_inter_env.items() %}{{ key }}='{{ val }}' {% endfor %}NCCL_COMM_ID=${COORD} \
+           ${NCCL_BIN} \
+           -b {{ gpu_validation_nccl_msg_start }} \
+           -e {{ gpu_validation_nccl_msg_end }} \
+           -f {{ gpu_validation_nccl_msg_factor }} \
+           -g ${NGPUS} -n 5 -w 2" &
+        PIDS+=($!)
+      done
+
+      # Run local rank 0
+      ${NCCL_BIN} \
+        -b {{ gpu_validation_nccl_msg_start }} \
+        -e {{ gpu_validation_nccl_msg_end }} \
+        -f {{ gpu_validation_nccl_msg_factor }} \
+        -g ${NGPUS} -n 5 -w 2
+
+      # Wait for remote ranks
+      for pid in "${PIDS[@]}"; do
+        wait "${pid}"
+      done
+
+- name: Run inter-VM NCCL all_reduce_perf
+  become: true
+  ansible.builtin.command:
+    cmd: /opt/nccl-inter-vm-run.sh
+  register: nccl_inter_result
+  changed_when: false
+  timeout: 600
+
+- name: Show inter-VM NCCL benchmark output
+  ansible.builtin.debug:
+    msg: "{{ nccl_inter_result.stdout_lines }}"
+
+- name: Extract maximum inter-VM bus bandwidth
+  ansible.builtin.set_fact:
+    nccl_inter_busbw_values: >-
+      {{ nccl_inter_result.stdout_lines
+         | select('match', '^\s*\d')
+         | map('regex_replace', '^\s+', '')
+         | map('split')
+         | selectattr('length', 'ge', 12)
+         | map(attribute='11')
+         | map('float')
+         | list }}
+
+- name: Determine peak inter-VM bus bandwidth
+  ansible.builtin.set_fact:
+    nccl_inter_peak_busbw: "{{ nccl_inter_busbw_values | max | default(0) }}"
+
+- name: Display peak inter-VM bus bandwidth
+  ansible.builtin.debug:
+    msg: >-
+      Peak inter-VM NCCL bus bandwidth: {{ nccl_inter_peak_busbw }} GB/s
+      (threshold: {{ gpu_validation_nccl_inter_vm_min_busbw }} GB/s)
+
+- name: Assert inter-VM bus bandwidth meets threshold
+  ansible.builtin.assert:
+    that:
+      - nccl_inter_peak_busbw | float >= gpu_validation_nccl_inter_vm_min_busbw | float
+    fail_msg: >-
+      Inter-VM NCCL bus bandwidth {{ nccl_inter_peak_busbw }} GB/s is below
+      threshold {{ gpu_validation_nccl_inter_vm_min_busbw }} GB/s.
+      Verify RDMA NIC passthrough, nvidia-peermem, and NCCL_IB_HCA settings.
+    success_msg: >-
+      Inter-VM NCCL bus bandwidth {{ nccl_inter_peak_busbw }} GB/s meets
+      threshold {{ gpu_validation_nccl_inter_vm_min_busbw }} GB/s

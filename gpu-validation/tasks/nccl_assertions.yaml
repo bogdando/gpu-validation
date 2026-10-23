@@ -1,0 +1,37 @@
+---
+# Parse nccl-tests output and assert bus bandwidth meets threshold
+# Expects: nccl_intra_result, gpu_validation_nccl_intra_vm_min_busbw
+
+- name: Extract maximum out-of-place bus bandwidth from nccl-tests output
+  ansible.builtin.set_fact:
+    nccl_intra_busbw_values: >-
+      {{ nccl_intra_result.stdout_lines
+         | select('match', '^\s*\d')
+         | map('regex_replace', '^\s+', '')
+         | map('split')
+         | selectattr('length', 'ge', 12)
+         | map(attribute='11')
+         | map('float')
+         | list }}
+
+- name: Determine peak intra-VM bus bandwidth
+  ansible.builtin.set_fact:
+    nccl_intra_peak_busbw: "{{ nccl_intra_busbw_values | max | default(0) }}"
+
+- name: Display peak intra-VM bus bandwidth
+  ansible.builtin.debug:
+    msg: >-
+      Peak intra-VM NCCL bus bandwidth: {{ nccl_intra_peak_busbw }} GB/s
+      (threshold: {{ gpu_validation_nccl_intra_vm_min_busbw }} GB/s)
+
+- name: Assert intra-VM bus bandwidth meets threshold
+  ansible.builtin.assert:
+    that:
+      - nccl_intra_peak_busbw | float >= gpu_validation_nccl_intra_vm_min_busbw | float
+    fail_msg: >-
+      Intra-VM NCCL bus bandwidth {{ nccl_intra_peak_busbw }} GB/s is below
+      threshold {{ gpu_validation_nccl_intra_vm_min_busbw }} GB/s.
+      This may indicate NVLink degradation or incorrect FM partition mapping.
+    success_msg: >-
+      Intra-VM NCCL bus bandwidth {{ nccl_intra_peak_busbw }} GB/s meets
+      threshold {{ gpu_validation_nccl_intra_vm_min_busbw }} GB/s

@@ -1,0 +1,109 @@
+---
+# Playbook: NCCL collective benchmarks with optional RDMA DirectGPU
+#
+# Supports two modes:
+#   1. Intra-VM only (default): runs nccl-tests inside each target_node
+#      independently, validating NVLink bandwidth within one FM partition.
+#   2. Inter-VM RDMA: when gpu_validation_nccl_inter_vm_enabled is true,
+#      orchestrates a multi-node nccl-tests run across target_nodes using
+#      RDMA NICs for GPUDirect RDMA transport.
+#
+# Prerequisites (baked into the VM image or installed by bootstrap):
+#   - NVIDIA driver + CUDA toolkit
+#   - nccl / libnccl (matching CUDA major)
+#   - nccl-tests built with MPI=0 (single-process multi-GPU) or
+#     MPI=1 + OpenMPI (multi-node)
+#   - rdma-core + libibverbs (when RDMA is enabled)
+#   - nvidia-peermem kernel module (when GPUDirect RDMA is enabled)
+
+- name: NCCL RDMA — VM provisioning (control node)
+  hosts: control_node
+  gather_facts: false
+  tasks:
+    - name: VM Pre-tasks
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: vm_pre.yaml
+      when: gpu_validation_enabled | default(true) | bool
+  tags: rhoso
+
+- name: NCCL RDMA — per-node setup and intra-VM benchmark
+  hosts: target_nodes
+  gather_subset:
+    - min
+  tasks:
+    - name: Common GPU setup
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: setup.yaml
+
+    - name: Reboot if system updates require it
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: reboot_if_needed.yaml
+
+    - name: Check GPUs
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: gpus.yaml
+
+    - name: NVIDIA driver setup
+      ansible.builtin.include_role:
+        name: osp.edpm.edpm_accel_drivers
+      when:
+        - gpu_validation_found[gpu_validation_vendor_name] | bool
+        - gpu_validation_vendor_name | upper == "NVIDIA"
+
+    - name: Reboot if driver install requires it
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: reboot_if_needed.yaml
+
+    - name: RDMA stack setup
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: rdma.yaml
+      when: gpu_validation_rdma_enabled | default(false) | bool
+
+    - name: RDMA assertions
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: rdma_assertions.yaml
+      when: gpu_validation_rdma_enabled | default(false) | bool
+
+    - name: Build and run intra-VM NCCL benchmark
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: nccl.yaml
+      when: gpu_validation_nccl_tests_enabled | default(false) | bool
+
+    - name: Intra-VM NCCL assertions
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: nccl_assertions.yaml
+      when: gpu_validation_nccl_tests_enabled | default(false) | bool
+
+- name: NCCL RDMA — inter-VM multi-node benchmark
+  hosts: target_nodes[0]
+  gather_subset:
+    - min
+  tasks:
+    - name: Run inter-VM NCCL all_reduce across nodes
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: nccl_inter_vm.yaml
+      when:
+        - gpu_validation_nccl_tests_enabled | default(false) | bool
+        - gpu_validation_nccl_inter_vm_enabled | default(false) | bool
+        - gpu_validation_rdma_enabled | default(false) | bool
+
+- name: NCCL RDMA — VM cleanup (control node)
+  hosts: control_node
+  gather_facts: false
+  tasks:
+    - name: VM Post-tasks
+      ansible.builtin.include_role:
+        name: gpu-validation
+        tasks_from: vm_post.yaml
+      when: gpu_validation_enabled | default(true) | bool
+  tags: rhoso

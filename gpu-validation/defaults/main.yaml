@@ -152,3 +152,56 @@ gpu_validation_reboot_force: false
 gpu_validation_reboot_timeout: 3600
 # [int] Post-reboot delay in seconds
 gpu_validation_reboot_post_delay: 60
+
+# ── NCCL collective benchmarks ──────────────────────────────────────
+# [bool] Enable nccl-tests (all_reduce_perf) on each target node
+gpu_validation_nccl_tests_enabled: false
+# [string] Git URL for nccl-tests source
+gpu_validation_nccl_tests_repo: "https://github.com/NVIDIA/nccl-tests.git"
+# [string] Branch/tag to checkout
+gpu_validation_nccl_tests_ref: "master"
+# [string] Build directory inside the VM
+gpu_validation_nccl_tests_dir: "/opt/nccl-tests"
+# [string] CUDA home for the nccl-tests build
+gpu_validation_nccl_cuda_home: "/usr/local/cuda"
+# [string] NCCL library path for the nccl-tests build
+gpu_validation_nccl_home: "/usr/lib64"
+# [int] Number of GPUs per VM for nccl-tests -g flag
+gpu_validation_nccl_gpus_per_node: "{{ gpu_validation_flavor_gpus }}"
+# [string] nccl-tests message-size range: start
+gpu_validation_nccl_msg_start: "8"
+# [string] nccl-tests message-size range: end
+gpu_validation_nccl_msg_end: "256M"
+# [string] nccl-tests message-size step factor
+gpu_validation_nccl_msg_factor: "2"
+# [float] Minimum acceptable intra-VM bus bandwidth (GB/s) for large messages
+gpu_validation_nccl_intra_vm_min_busbw: !!float "300.0"
+# [dict] Extra NCCL environment variables (e.g. NCCL_DEBUG, NCCL_IB_HCA)
+gpu_validation_nccl_env: {}
+
+# ── Inter-VM NCCL (multi-node, requires RDMA) ──────────────────────
+# [bool] Enable cross-VM NCCL benchmark (needs ≥2 target_nodes + RDMA)
+gpu_validation_nccl_inter_vm_enabled: false
+# [float] Minimum acceptable inter-VM bus bandwidth (GB/s)
+gpu_validation_nccl_inter_vm_min_busbw: !!float "30.0"
+# [int] Number of FM partitions under test (used in reporting)
+gpu_validation_nccl_inter_vm_partitions: 2
+
+# ── RDMA / GPUDirect ───────────────────────────────────────────────
+# [bool] Enable RDMA stack verification and GPUDirect RDMA setup
+gpu_validation_rdma_enabled: false
+# [string] PCI alias for the RDMA NIC passed through to VMs
+gpu_validation_rdma_pci_alias: "cx7-rdma"
+# [int] Number of RDMA NICs per VM
+gpu_validation_rdma_nics_per_vm: 1
+# [string] Expected IB device name inside the VM (e.g. mlx5_0)
+gpu_validation_rdma_ib_dev: "mlx5_0"
+# [bool] Load nvidia-peermem kernel module for GPUDirect RDMA
+gpu_validation_nvidia_peermem_enabled: false
+# [list] Packages required for RDMA in the guest
+gpu_validation_rdma_packages:
+  - rdma-core
+  - libibverbs
+  - libibverbs-utils
+  - infiniband-diags
+  - perftest

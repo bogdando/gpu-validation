@@ -1,0 +1,67 @@
+---
+# Build nccl-tests and run intra-VM all_reduce_perf benchmark
+# Expects: gpu_validation_nccl_* variables from defaults
+
+- name: Install NCCL library
+  become: true
+  ansible.builtin.dnf:
+    name:
+      - libnccl
+      - libnccl-devel
+    state: present
+
+- name: Install build dependencies for nccl-tests
+  become: true
+  ansible.builtin.dnf:
+    name:
+      - gcc-c++
+      - make
+      - cuda-toolkit
+    state: present
+
+- name: Clone nccl-tests repo
+  become: true
+  ansible.builtin.git:
+    repo: "{{ gpu_validation_nccl_tests_repo }}"
+    dest: "{{ gpu_validation_nccl_tests_dir }}"
+    version: "{{ gpu_validation_nccl_tests_ref }}"
+    force: true
+
+- name: Build nccl-tests (single-process, no MPI)
+  become: true
+  ansible.builtin.command:
+    cmd: >-
+      make -j$(nproc)
+      CUDA_HOME={{ gpu_validation_nccl_cuda_home }}
+      NCCL_HOME={{ gpu_validation_nccl_home }}
+    chdir: "{{ gpu_validation_nccl_tests_dir }}"
+  environment:
+    PATH: "{{ gpu_validation_nccl_cuda_home }}/bin:{{ ansible_env.PATH }}"
+    LD_LIBRARY_PATH: "{{ gpu_validation_nccl_cuda_home }}/lib64:{{ gpu_validation_nccl_home }}"
+  changed_when: true
+
+- name: Compose NCCL environment variables
+  ansible.builtin.set_fact:
+    gpu_validation_nccl_env_full: >-
+      {{
+        gpu_validation_nccl_env | default({})
+        | combine({'CUDA_VISIBLE_DEVICES': range(0, gpu_validation_nccl_gpus_per_node | int) | join(',')})
+      }}
+
+- name: Run intra-VM all_reduce_perf benchmark
+  become: true
+  ansible.builtin.shell:
+    cmd: >-
+      {{ gpu_validation_nccl_tests_dir }}/build/all_reduce_perf
+      -b {{ gpu_validation_nccl_msg_start }}
+      -e {{ gpu_validation_nccl_msg_end }}
+      -f {{ gpu_validation_nccl_msg_factor }}
+      -g {{ gpu_validation_nccl_gpus_per_node }}
+      2>&1
+  environment: "{{ gpu_validation_nccl_env_full }}"
+  register: nccl_intra_result
+  changed_when: false
+
+- name: Show intra-VM NCCL benchmark output
+  ansible.builtin.debug:
+    msg: "{{ nccl_intra_result.stdout_lines }}"

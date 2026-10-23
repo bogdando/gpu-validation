@@ -1,0 +1,33 @@
+---
+# Verify RDMA stack readiness and GPUDirect RDMA (nvidia-peermem)
+
+- name: Check RDMA device presence
+  ansible.builtin.command:
+    cmd: ibv_devinfo -d "{{ gpu_validation_rdma_ib_dev }}"
+  register: rdma_devinfo
+  changed_when: false
+  failed_when: rdma_devinfo.rc != 0
+
+- name: Assert RDMA device is active
+  ansible.builtin.assert:
+    that:
+      - "'PORT_ACTIVE' in rdma_devinfo.stdout or 'state:.*PORT_ACTIVE' in rdma_devinfo.stdout"
+    fail_msg: >-
+      RDMA device {{ gpu_validation_rdma_ib_dev }} is not in PORT_ACTIVE state.
+      Output: {{ rdma_devinfo.stdout }}
+    success_msg: "RDMA device {{ gpu_validation_rdma_ib_dev }} is active"
+
+- name: Verify nvidia-peermem is loaded
+  ansible.builtin.command:
+    cmd: lsmod
+  register: lsmod_output
+  changed_when: false
+  when: gpu_validation_nvidia_peermem_enabled | bool
+
+- name: Assert nvidia_peermem module is loaded
+  ansible.builtin.assert:
+    that:
+      - "'nvidia_peermem' in lsmod_output.stdout"
+    fail_msg: "nvidia_peermem kernel module is not loaded"
+    success_msg: "nvidia_peermem kernel module is loaded"
+  when: gpu_validation_nvidia_peermem_enabled | bool
