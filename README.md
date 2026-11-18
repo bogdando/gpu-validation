@@ -53,3 +53,8 @@ Once the RHOSO setup is complete, do the following:
     ```
     $ oc apply -f AnsibleTestCR.yaml
     ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and DCO information.
+
